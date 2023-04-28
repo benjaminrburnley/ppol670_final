@@ -1,0 +1,45 @@
+---
+title: "Redistricting Project: Florida"
+author: "Ben Burnley, Sean Conner, Gustavo Murillo Velazquez, & Katie Ward"
+format: 
+  html:
+    self-contained: true
+---
+# Introduction 
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| output: false
+
+# libraries 
+library(tidyverse)
+library(sf)
+library(patchwork)
+
+# data import 
+dist_22 = st_read("data/fl_cong_adopted_2022/P000C0109.shp") # 2022 Congressional District Map 
+dist_20 = st_read("data/fl_cong_2015_to_2021/fl_cong_2015_to_2021.shp") # 2015-2021 Congressional District Map 
+```
+
+This project examines the effect of the redistricting process on voter turnout. We use the change in maps from 2020 to 2022 in the state of Florida as a case study to examine this effect. 
+
+```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+
+# plots comparing two maps 
+plot1 = ggplot(dist_20)+
+  geom_sf(fill = "white")+
+  theme_void()+
+  ggtitle("2015-2021 Map")
+
+plot2 = ggplot(dist_22)+
+  geom_sf(fill = "white")+
+  theme_void()+
+ ggtitle("2022 Map")
+
+plot1 + plot2
+```
+
