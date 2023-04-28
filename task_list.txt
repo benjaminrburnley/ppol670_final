@@ -1,0 +1,36 @@
+## Task List 
+
+1. Download Files and clean for analysis  
+  - 2022 Congressional District Map (DONE) 
+  - 2012 Congressional District Map (DONE)
+  - Elections Results 2022 
+  - Elections Results 2018
+  
+  Bonus: 
+  - Any additional voting data
+  - Any and all variables aggregated at the district/precinct level 
+  
+2. Map Congressional districts and identify overlaps 
+ - Might be able to use the package overlapptest
+ - Aaron says there are tools to do this in sf
+ 
+3. Calculate turnout changes 
+ - Midterm 2018 vs. Midterm 2022 total turnout  
+ - Percent for each party 2018 vs. 2022
+ - R/D ratio for each precinct 
+ 
+4. Visualize these metrics 
+ - Show that precincts that have been redistricted are/are not different than precincts that are not redistricted
+ - Other visualizations (open to ideas!)
+ 
+5. Model changes (optional)
+  - Using district/precinct level data, can we model how redistricting impacts turnout? 
+  - DV: Turnout/Percent Republican/Ratio R to D
+  - MAIN IV: Give every precinct that is redrawn a 1 and every precinct that is not a 0 
+  - CONTROLS: Any/all variables at observation level (demographics, past election results, presidential election dummy)
+ 
+
+
+References for analysis: 
+Partisan Alignment Increases Voter Turnout: Evidence from Redistricting - https://doi-org.proxy.library.georgetown.edu/10.1007/s11109-021-09685-y
+
