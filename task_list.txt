@@ -1,14 +1,23 @@
 ## Task List 
+Redistricting Data Hub: 
+https://redistrictingdatahub.org/state/florida/
 
 1. Download Files and clean for analysis  
+  District Maps
   - 2022 Congressional District Map (DONE) 
   - 2012 Congressional District Map (DONE)
-  - Elections Results 2022 
+  
+  District Level
+  - Elections Results 2022  
   - Elections Results 2018
+  
+  Precinct Level 
+  - Election Results 2022
+  - Election Results 2018
   
   Bonus: 
   - Any additional voting data
-  - Any and all variables aggregated at the district/precinct level 
+  - Any and all variables aggregated at the district/precinct level (i.e. Census Demographics, etc.)
   
 2. Map Congressional districts and identify overlaps 
  - Might be able to use the package overlapptest
