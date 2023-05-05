@@ -43,4 +43,26 @@ plot2 = ggplot(dist_22)+
 plot1 + plot2
 ```
 
+```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+
+# transform the crs of dist 20 to match 22 
+dist_20_trans = st_transform(dist_20, crs = st_crs(dist_22))
+
+# map of overlapping geometries 
+ggplot()+
+  geom_sf(data = dist_20_trans, color = "red", alpha = 0, lwd = 1) +
+  geom_sf(data = dist_22, color = "blue", alpha = 0, lwd = 0.5) + 
+  theme_void()+
+  labs(
+    title = "Overlay of Old and New Districts ",
+    subtitle = "Red lines are old borders, purple lines are unchanged, blue lines are new borders",
+  )+
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.subtitle = element_text(face = "italic", size = "8")
+  )
+```
 
