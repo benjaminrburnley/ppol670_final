@@ -237,6 +237,7 @@ data_both = data_18 %>%
   mutate(redrawn = if_else(district_18 == district_22, FALSE, TRUE)) %>% 
   dplyr::select(district_18, district_22, redrawn)
 
+# data frame with column indicating whether a precinct was drawn into a new district
 data = vote_18 %>% 
   bind_cols(data_both)
 ```
