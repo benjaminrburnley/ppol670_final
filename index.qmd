@@ -16,10 +16,27 @@ format:
 library(tidyverse)
 library(sf)
 library(patchwork)
+library(janitor)
 
 # data import 
-dist_22 = st_read("data/fl_cong_adopted_2022/P000C0109.shp") # 2022 Congressional District Map 
-dist_20 = st_read("data/fl_cong_2015_to_2021/fl_cong_2015_to_2021.shp") # 2015-2021 Congressional District Map 
+dist_18 = st_read("data/fl_cong_2015_to_2021/fl_cong_2015_to_2021.shp") %>%  # 2015-2021 Congressional District Map 
+  clean_names()
+dist_22 = st_read("data/fl_cong_adopted_2022/P000C0109.shp") %>%  # 2022 Congressional District Map 
+ clean_names() %>% 
+  st_transform(crs = st_crs(dist_18))
+vote_18 = st_read("data/fl_vest_18/fl_vest_18.shp") %>% 
+  clean_names() %>% 
+  st_transform(crs = st_crs(dist_18))
+
+# filter for valid geometries 
+vote_18 = vote_18[st_is_valid(vote_18) == TRUE,]
+
+# transform the crs of dist 20 to match 22 
+dist_18 = st_transform(dist_18, crs = st_crs(dist_22))
+
+# check crs 
+st_crs(vote_18) == st_crs(dist_18)
+st_crs(vote_18) == st_crs(dist_22)
 ```
 
 This project examines the effect of the redistricting process on voter turnout. We use the change in maps from 2020 to 2022 in the state of Florida as a case study to examine this effect. 
@@ -30,7 +47,7 @@ This project examines the effect of the redistricting process on voter turnout. 
 #| code-fold: true
 
 # plots comparing two maps 
-plot1 = ggplot(dist_20)+
+plot1 = ggplot(dist_18)+
   geom_sf(fill = "white")+
   theme_void()+
   ggtitle("2015-2021 Map")
@@ -45,15 +62,196 @@ plot1 + plot2
 
 ```{r}
 #| warning: false
+#| messages: false
+#| code-fold: true
+
+# plot of precincts 
+ggplot(vote_18)+
+  geom_sf()+
+  theme_void()
+```
+
+
+# How to use Redistricting Data Hub's API
+
+** SECTION ON OUR API PROCESS **
+
+# Data Processing 
+
+** SECTION ON DATA CLEANING AND MUTATION **
+
+```{r}
+#| warning: false
+#| message: false
+
+# loop for creating district 2018 objects 
+districts_18 <- list()
+
+for(i in 1:27){
+districts_18[[i]] <- assign(paste0("dist_18_",i), filter(dist_18, district == i))
+}
+
+# loop for creating district 2022 objects
+districts_22 <- list()
+
+for(i in 1:28){
+districts_22[[i]] <-  assign(paste0("dist_22_", i), filter(dist_22, district == i))
+}
+
+# create district columns for 2018 map 
+for(i in 1:27){
+  assign(paste0("within_18_",i), st_within(vote_18, districts_18[[i]], sparse = FALSE))
+}
+
+# create district columns for 2022 map 
+for(i in 1:28){
+  assign(paste0("within_22_",i), st_within(vote_18, districts_22[[i]], sparse = FALSE))
+}
+
+# collect columns
+dist18_df = data.frame(dist_1 = within_18_1,
+                   dist_2 = within_18_2,
+                   dist_3 =  within_18_3,
+                   dist_4 = within_18_4,
+                   dist_5 = within_18_5,
+                   dist_6 = within_18_6,
+                   dist_7 = within_18_7,
+                   dist_8 = within_18_8,
+                   dist_9 = within_18_9,
+                   dist_10 = within_18_10,
+                   dist_11 = within_18_11,
+                   dist_12 = within_18_12,
+                   dist_13 = within_18_13,
+                   dist_14 = within_18_14,
+                   dist_15 = within_18_15,
+                   dist_16 = within_18_16,
+                   dist_17 = within_18_17,
+                   dist_18 = within_18_18,
+                   dist_19 = within_18_19,
+                   dist_20 = within_18_20,
+                   dist_21 = within_18_21,
+                   dist_22 = within_18_22,
+                   dist_23 = within_18_23,
+                   dist_24 = within_18_24,
+                   dist_25 = within_18_25,
+                   dist_26 = within_18_26,
+                   dist_27 = within_18_27)
+
+data_18 = dist18_df %>% 
+  mutate(district_18 = case_when(
+    dist_1 == TRUE ~ "District 1",
+    dist_2 == TRUE ~ "District 2",
+    dist_3 == TRUE ~ "District 3", 
+    dist_4 == TRUE ~ "District 4",
+    dist_5 == TRUE ~ "District 5", 
+    dist_6 == TRUE ~ "District 6", 
+    dist_7 == TRUE ~ "District 7", 
+    dist_8 == TRUE ~ "District 8",
+    dist_9 == TRUE ~ "District 9", 
+    dist_10 == TRUE ~ "District 10", 
+    dist_11 == TRUE ~ "District 11", 
+    dist_12 == TRUE ~ "District 12", 
+    dist_13 == TRUE ~ "District 13", 
+    dist_14 == TRUE ~ "District 14", 
+    dist_15 == TRUE ~ "District 15", 
+    dist_16 == TRUE ~ "District 16",
+    dist_17 == TRUE ~ "District 17", 
+    dist_18 == TRUE ~ "District 18", 
+    dist_19 == TRUE ~ "District 19",
+    dist_20 == TRUE ~ "District 20", 
+    dist_21 == TRUE ~ "District 21", 
+    dist_22 == TRUE ~ "District 22",
+    dist_23 == TRUE ~ "District 23", 
+    dist_24 == TRUE ~ "District 24", 
+    dist_25 == TRUE ~ "District 25", 
+    dist_26 == TRUE ~ "District 26",
+    dist_27 == TRUE ~ "District 27", 
+    TRUE ~ "Split"
+  ))
+
+dist22_df = data.frame(dist_1 = within_22_1,
+                   dist_2 = within_22_2,
+                   dist_3 =  within_22_3,
+                   dist_4 = within_22_4,
+                   dist_5 = within_22_5,
+                   dist_6 = within_22_6,
+                   dist_7 = within_22_7,
+                   dist_8 = within_22_8,
+                   dist_9 = within_22_9,
+                   dist_10 = within_22_10,
+                   dist_11 = within_22_11,
+                   dist_12 = within_22_12,
+                   dist_13 = within_22_13,
+                   dist_14 = within_22_14,
+                   dist_15 = within_22_15,
+                   dist_16 = within_22_16,
+                   dist_17 = within_22_17,
+                   dist_18 = within_22_18,
+                   dist_19 = within_22_19,
+                   dist_20 = within_22_20,
+                   dist_21 = within_22_21,
+                   dist_22 = within_22_22,
+                   dist_23 = within_22_23,
+                   dist_24 = within_22_24,
+                   dist_25 = within_22_25,
+                   dist_26 = within_22_26,
+                   dist_27 = within_22_27,
+                   dist_28 = within_22_28)
+
+data_22 = dist22_df %>% 
+  mutate(district_22 = case_when(
+    dist_1 == TRUE ~ "District 1",
+    dist_2 == TRUE ~ "District 2",
+    dist_3 == TRUE ~ "District 3", 
+    dist_4 == TRUE ~ "District 4",
+    dist_5 == TRUE ~ "District 5", 
+    dist_6 == TRUE ~ "District 6", 
+    dist_7 == TRUE ~ "District 7", 
+    dist_8 == TRUE ~ "District 8",
+    dist_9 == TRUE ~ "District 9", 
+    dist_10 == TRUE ~ "District 10", 
+    dist_11 == TRUE ~ "District 11", 
+    dist_12 == TRUE ~ "District 12", 
+    dist_13 == TRUE ~ "District 13", 
+    dist_14 == TRUE ~ "District 14", 
+    dist_15 == TRUE ~ "District 15", 
+    dist_16 == TRUE ~ "District 16",
+    dist_17 == TRUE ~ "District 17", 
+    dist_18 == TRUE ~ "District 18", 
+    dist_19 == TRUE ~ "District 19",
+    dist_20 == TRUE ~ "District 20", 
+    dist_21 == TRUE ~ "District 21", 
+    dist_22 == TRUE ~ "District 22",
+    dist_23 == TRUE ~ "District 23", 
+    dist_24 == TRUE ~ "District 24", 
+    dist_25 == TRUE ~ "District 25", 
+    dist_26 == TRUE ~ "District 26",
+    dist_27 == TRUE ~ "District 27", 
+    dist_28 == TRUE ~ "District 28",
+    TRUE ~ "Split"
+  ))
+
+# combine datasets and create redrawn column
+data_both = data_18 %>% 
+  bind_cols(data_22) %>% 
+  mutate(redrawn = if_else(district_18 == district_22, FALSE, TRUE)) %>% 
+  dplyr::select(district_18, district_22, redrawn)
+
+data = vote_18 %>% 
+  bind_cols(data_both)
+```
+
+# Visualizations 
+
+** SECTION ON DATA VISUALIZATIONS ** 
+```{r}
+#| warning: false
 #| message: false
 #| code-fold: true
 
-# transform the crs of dist 20 to match 22 
-dist_20_trans = st_transform(dist_20, crs = st_crs(dist_22))
-
 # map of overlapping geometries 
 ggplot()+
-  geom_sf(data = dist_20_trans, color = "red", alpha = 0, lwd = 1) +
+  geom_sf(data = dist_18, color = "red", alpha = 0, lwd = 1) +
   geom_sf(data = dist_22, color = "blue", alpha = 0, lwd = 0.5) + 
   theme_void()+
   labs(
@@ -66,3 +264,6 @@ ggplot()+
   )
 ```
 
+# Machine Learning Model 
+
+** SECTION ON MACHINE LEARNING PROCESS **
