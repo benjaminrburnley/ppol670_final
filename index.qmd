@@ -14,6 +14,8 @@ format:
 
 # libraries 
 library(tidyverse)
+library(tidymodels)
+library(spatialsample)
 library(sf)
 library(patchwork)
 library(janitor)
@@ -263,8 +265,182 @@ ggplot()+
     plot.title = element_text(face = "bold"),
     plot.subtitle = element_text(face = "italic", size = "8")
   )
+
+# map of districts and whether they were redrawn
+ggplot(data = data, mapping = aes(fill = redrawn)) +
+  geom_sf(alpha = 0.9, color = NA) +
+  theme_void() +
+  labs(title = "Redrawn Precincts",
+       fill = "Was the Precinct Redrawn?") +
+  theme(plot.title = element_text(face = "bold"),
+        legend.title = element_text(face = "italic", size = 8))
+
+```
+
+The dispersion of redrawn precincts in Florida does not appear to be random where those in Central Florida were redistricted more than those on the coasts. We suspect underlying political motivations in Congressional redistricting. In order to test this assumption, we deploy a machine learning model with the following predictors: [fill in with variables we settle on]
+
+# Preparing the Dataset for Modeling
+
+```{r}
+
+# checking for class imbalances
+summary(data$redrawn)
+
+# select variables for model and change types for optimal use
+redrawn_sf = data %>%
+  select(pct_std, county, precinct,
+         g18ussrsco, g18ussdnel, g18govdgil, g18govrdes,
+         redrawn, -geometry) %>%
+  mutate_if(is.logical, factor) %>%
+  st_drop_geometry()
+
+redrawn_sf
+
 ```
 
 # Machine Learning Model 
 
 ** SECTION ON MACHINE LEARNING PROCESS **
+
+```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+
+set.seed(20230510)
+
+# set up v fold cross validation
+folds = vfold_cv(redrawn_sf, folds = 10, repeats = 1)
+
+# split precinct data into training and testing data
+split = initial_split(redrawn_sf, strata = redrawn)
+data_train = training(split)
+data_test = testing(split)
+
+# create recipe
+redrawn_rec = recipe(redrawn ~ ., data = data_train) %>%
+  # update roles of variables to not be used in the model but want to keep
+  # for potentiala future use
+  update_role(pct_std, county, precinct, new_role = "ID") %>%
+  # standardize numeric variables
+  step_center(all_numeric_predictors()) %>%
+  step_scale(all_numeric_predictors()) %>%
+  prep()
+
+```
+
+The first machine learning model will be a simple logistic regression in order to set a baseline of performance.
+
+```{r}
+
+# set basic logistic regression model
+logistic_mod = logistic_reg(mode = "classification",
+                             engine = "glm")
+
+# feed recipe and model to a logistic regression workflow
+logistic_wf = workflow() %>%
+  add_recipe(redrawn_rec) %>%
+  add_model(logistic_mod)
+
+# implement cross validation to evaluate models
+logistic_cv = logistic_wf %>%
+  fit_resamples(resamples = folds, control = control_resamples(save_pred = TRUE))
+
+# see available metrics
+logistic_cv %>% unnest(.metrics)
+# show best metrics
+logistic_cv %>% collect_metrics()
+# pull out best model according to ROC metric
+logistic_best_roc = logistic_cv %>%
+  select_best(metric = "roc_auc")
+
+# implement final workflow based on best model
+logistic_final_wf = finalize_workflow(logistic_wf,
+                                       parameters = logistic_best_roc)
+
+```
+After having set a baseline of performance with the logistic regression model, implemented with 10-fold cross validation, the next step is to deploy several other models and evaluate their performance relative to this baseline. The following Random Forest model will include the same cross-validation as well as hyperparameter tuning.
+
+```{r}
+
+# set model specifications
+rf_tune_spec = rand_forest(mtry = tune(),
+            trees = 100,
+            min_n = tune()) %>%
+  set_mode("classification") %>%
+  set_engine("ranger")
+
+# feed same recipe and Random Forest model to new workflow
+rf_wf = workflow() %>%
+  add_recipe(redrawn_rec) %>%
+  add_model(rf_tune_spec)
+
+# tune hyperparameters
+rf_tune_res = tune_grid(
+  rf_wf,
+  resamples = folds,
+  grid = 20
+)
+
+rf_tune_res %>% unnest(.metrics)
+rf_tune_res %>% collect_metrics()
+rf_tune_res %>% select_best("roc_auc")
+
+# based on best ROC, mtry = 1 and min_n = 28
+# create grid for ranges with these values
+rf_grid_reg = grid_regular(
+  mtry(range = c(0,5)),
+  min_n(range = c(20, 40)),
+  levels = 5
+)
+
+# tune hyperparameters again based on new grid
+rf_grid_reg_res = tune_grid(
+  rf_wf,
+  resamples = folds,
+  grid = rf_grid_reg
+)
+
+rf_grid_reg_res %>% unnest(.metrics)
+rf_grid_reg_res %>% collect_metrics()
+# pull out best performing hyperparameters based on ROC metric
+rf_best_roc = rf_grid_reg_res %>%
+  select_best("roc_auc")
+
+rf_final_mod = finalize_model(
+  rf_tune_spec,
+  rf_best_roc
+)
+
+rf_final_mod %>%
+  set_engine("ranger", importance = "permutation") %>%
+  fit(redrawn ~ ., data = juice(redrawn_rec) %>%
+        select(-pct_std, -county, -precinct)) %>%
+  vip::vip(geom = "point")
+
+rf_final_wf = workflow() %>%
+  add_recipe(redrawn_rec) %>%
+  add_model(rf_final_mod)
+
+rf_final_fit = fit(rf_final_wf, data_train)
+
+```
+
+## Estimate the Out of Sample Error Rate
+
+```{r}
+
+data_test_predictions = predict(rf_final_fit, new_data = data_test)
+
+prediction = bind_cols(
+  `actual_redrawn` = data_test$redrawn,
+  `predicted_redrawn` = data_test_predictions$.pred_class
+)
+
+accuracy(prediction, truth = actual_redrawn, estimate = predicted_redrawn)
+recall(prediction, truth = actual_redrawn, estimate = predicted_redrawn)
+specificity(prediction, truth = actual_redrawn, estimate = predicted_redrawn)
+
+
+
+```
