@@ -23,7 +23,8 @@ library(janitor)
 # data import 
 dist_18 = st_read("data/fl_cong_2015_to_2021/fl_cong_2015_to_2021.shp") %>%  # 2015-2021 Congressional District Map 
   clean_names()
-dist_22 = st_read("data/fl_cong_adopted_2022/P000C0109.shp") %>%  # 2022 Congressional District Map 
+dist_22 = st_read("data/fl_cong_adopted_2022/P000C0109.shp") %>%  
+# 2022 Congressional District Map 
  clean_names() %>% 
   st_transform(crs = st_crs(dist_18))
 vote_18 = st_read("data/fl_vest_18/fl_vest_18.shp") %>% 
@@ -444,3 +445,117 @@ specificity(prediction, truth = actual_redrawn, estimate = predicted_redrawn)
 
 
 ```
+
+Because Districts 18 and 21 seemed to have the highest predictive power in the model, we dug a little deeper at some of their demographic information to see if we could learn more context for those areas. The following charts show the overall population percentages of major races in the state and then specific population estimates for Districts 18 and 21. 
+
+```{r}
+cvap_18 <- st_read("/Users/katieward/Desktop/Georgetown/Spring_2023/Data_Science/ppol670_final/ppol670_final/data/fl_cvap_2018_cd/fl_cvap_2018_cd.shp") 
+
+# Data Visualization of Black population
+cvap_18$percent <- (cvap_18$ALL_BLK18 / cvap_18$ALL_TOT18) * 100
+
+black_percent <- ggplot() +
+  geom_sf(data = cvap_18, aes(fill = percent)) +
+  scale_fill_gradient(name = "Percentage", 
+                      low = "white", high = "darkblue",
+                      breaks = seq(0, 100, by = 10),
+                      labels = paste0(seq(0, 100, by = 10), "%")) +
+  theme_void() +
+  labs(title = "Black Population 2018 by Cong. District",
+       fill = "Percentage of District Population") +
+  theme(plot.title = element_text(face = "bold"),
+        legend.title = element_text(face = "italic", size = 8))
+
+
+# Data Visualization of Hispanic Population
+cvap_18$percenthisp <- (cvap_18$ALL_HSP18 / cvap_18$ALL_TOT18) * 100
+
+hisp_percent <- ggplot() +
+  geom_sf(data = cvap_18, aes(fill = percenthisp)) +
+  scale_fill_gradient(name = "Percentage", 
+                      low = "white", high = "darkgreen",
+                      breaks = seq(0, 100, by = 10),
+                      labels = paste0(seq(0, 100, by = 10), "%")) +
+  theme_void() +
+  labs(title = "Hispanic Population 2018 by Cong. District",
+       fill = "Percentage of District Population") +
+  theme(plot.title = element_text(face = "bold"),
+        legend.title = element_text(face = "italic", size = 8))
+
+hisp_percent
+
+# Data Visualization of White Population
+
+cvap_18$percentwhite <- (cvap_18$ALL_WHT18 / cvap_18$ALL_TOT18) * 100
+
+white_percent <- ggplot() +
+  geom_sf(data = cvap_18, aes(fill = percentwhite)) +
+  scale_fill_gradient(name = "Percentage", 
+                      low = "white", high = "darkred",
+                      breaks = seq(0, 100, by = 10),
+                      labels = paste0(seq(0, 100, by = 10), "%")) +
+  theme_void() +
+  labs(title = "White Population 2018 by Cong. District",
+       fill = "Percentage of District Population") +
+  theme(plot.title = element_text(face = "bold"),
+        legend.title = element_text(face = "italic", size = 8))
+
+white_percent
+
+# Data Vis. of Race Estimates for District 18
+cvap_dist18 <- cvap_18 %>%
+  filter(DIST=="Congressional District 18 (116th Congress)") %>%
+  st_drop_geometry() %>%
+  select(ALL_TOT18, ALL_AIA18, ALL_ASN18, ALL_BLK18, ALL_NHP18, ALL_WHT18, ALL_2OM18, ALL_HSP18) %>%
+  rename("Total Population Est." = ALL_TOT18, 
+          "Native American" = ALL_AIA18, 
+         "Black" = ALL_BLK18,
+         "Pacific Islander" = ALL_NHP18,
+         "White" = ALL_WHT18,
+         "Two or More Races" = ALL_2OM18,
+         "Hispanic" = ALL_HSP18,
+         "Asian" = ALL_ASN18)
+
+cvap_dist18 <- cvap_dist18 %>% 
+  pivot_longer(everything(),
+                    names_to='Race',
+                    values_to='Count')
+
+cvap_dist18$Race <- reorder(cvap_dist18$Race, -cvap_dist18$Count)
+
+dist18_raceplot <- cvap_dist18 %>%
+ggplot(aes(x = Race, y = Count, fill= Count)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Population Estimate of District 18", x = "Race", y = "Count") 
+
+dist18_raceplot
+
+# Data Vis. of Race Estimates for District 21
+cvap_dist21 <- cvap_18 %>%
+  filter(DIST=="Congressional District 21 (116th Congress)") %>%
+  st_drop_geometry() %>%
+  select(ALL_TOT18, ALL_AIA18, ALL_ASN18, ALL_BLK18, ALL_NHP18, ALL_WHT18, ALL_2OM18, ALL_HSP18) %>%
+  rename("Total Population Est." = ALL_TOT18, 
+         "Native American" = ALL_AIA18, 
+         "Black" = ALL_BLK18,
+         "Pacific Islander" = ALL_NHP18,
+         "White" = ALL_WHT18,
+         "Two or More Races" = ALL_2OM18,
+         "Hispanic" = ALL_HSP18,
+         "Asian" = ALL_ASN18)
+
+cvap_dist21 <- cvap_dist21 %>% 
+  pivot_longer(everything(),
+               names_to='Race',
+               values_to='Count')
+
+cvap_dist21$Race <- reorder(cvap_dist21$Race, -cvap_dist21$Count)
+
+dist21_raceplot <- cvap_dist21 %>%
+  ggplot(aes(x = Race, y = Count, fill= Count)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Population Estimate of District 21", x = "Race", y = "Count") 
+
+dist21_raceplot
+```
+
