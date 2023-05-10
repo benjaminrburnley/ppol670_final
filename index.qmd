@@ -23,10 +23,11 @@ library(janitor)
 # data import 
 dist_18 = st_read("data/fl_cong_2015_to_2021/fl_cong_2015_to_2021.shp") %>%  # 2015-2021 Congressional District Map 
   clean_names()
-dist_22 = st_read("data/fl_cong_adopted_2022/P000C0109.shp") %>%  
-# 2022 Congressional District Map 
+dist_22 = st_read("data/fl_cong_adopted_2022/P000C0109.shp") %>%  # 2022 Congressional District Map 
  clean_names() %>% 
   st_transform(crs = st_crs(dist_18))
+
+# voting data at precinct level for 2022
 vote_18 = st_read("data/fl_vest_18/fl_vest_18.shp") %>% 
   clean_names() %>% 
   st_transform(crs = st_crs(dist_18))
@@ -76,6 +77,13 @@ ggplot(vote_18)+
 
 
 # How to use Redistricting Data Hub's API
+
+
+The data for this project comes from Redistricting Data Hub, a nonpartisan organization that collects a number of sources of data related to redistricting efforts with the goal of providing resources and facilitating participation in the process. For each state, RDH collects a number of data sets related to district boundaries, election results, voter files, as well as demographics for each state from the American Community Survey. This level of access to a single stash of data makes RDH an ideal source of data for government groups, academics, and anyone interested in the redistricting process to access all the data they need to do analysis. 
+
+To aid in this, the Redistricting Data Hub has an API to locate and download all files related to a given state. We decided this would be the best approach to getting the data necessary for our analysis of Florida's redistricting process. Redistricting Data Hub has a slightly tedious process for accessing the API compared to other sources we have used. First, the individual requesting access must fill out a Google form located on RDH's website. Part of this process is a prompt to verify your identity by emailing a picture of the applicant holding a government issued ID. To complete the process someone at RDH must review your application and verify your identity. This process is more restrictive than most APIs and might be a bit cumbersome for some research applications. 
+
+From here, you have access to a GitHub repository where you can download a Python script (in the code blocks below) to download all the data for a state of interest. Researchers have the ability of downloading up to 4 states at a time, making this process relatively scalable depending upon the scope of your research. We followed these steps to download all files related to the state of Florida in Redistricting Data Hub's database. 
 
 ```{python}
 #| eval : false
@@ -330,9 +338,12 @@ run()
 ```
 
 
+
 # Data Processing 
 
-** SECTION ON DATA CLEANING AND MUTATION **
+For our analysis, we ended up primarily relying on three data sets. The first two are the Congressional District maps from Florida's Redistricting process. The first map was utilized for all elections between 2018 and 2020. The second map is the new map that was redrawn for the 2020 redistricting process and used in the 2022 midterms. Last, we used the precinct level voting results from the Voting and Elections Science Team (VEST). During this process we ran into one of the first hurdles in pursuing our ideal project. The plan had been to compare precinct level results across two maps. While precincts are often redrawn with Congressional districts, our aim was to see if a precinct had been drawn into a new district during redistricting, quantify the degree to which this was the case, and then see how this impacted factors like turnout and partisan vote. Unfortunately for our project, no one has joined 2022 midterm results with precinct shapefiles yet and so this approach is not yet feasible. We briefly considered using the only available location data in the 2022 precinct data, polling location name and county, to geocode polling location into point data. This would at least let us compare the district the precinct was within during the 2018 cycle to the district the polling location was in during the 2022 cycle. With only location name for over 6,000 precincts this felt both unfeasible and susceptible to mistakes. Had the data included precinct address, we could have coded point data using `tidygeocoder`.
+
+From here, we decided that the best approach would be to try to say something about the redistricting process given the data we had. The process we decided on was to determine whether a precinct had been  
 
 ```{r}
 #| warning: false
