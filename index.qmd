@@ -548,6 +548,8 @@ plot1 <- ggplot() +
   theme(plot.title = element_text(face = "bold"),
         legend.title = element_text(face = "italic", size = 10))
 
+plot1
+
 # Map to show the voting behavior of those precints that were redrawn in 2022
 plot2 <- ggplot() +
   geom_sf(data = data_2 %>% filter(redrawn == "TRUE"),
@@ -561,6 +563,8 @@ plot2 <- ggplot() +
        fill = "Most voted candidate") +
   theme(plot.title = element_text(face = "bold"),
         legend.title = element_text(face = "italic", size = 10))
+
+plot2
 
 ```
 
