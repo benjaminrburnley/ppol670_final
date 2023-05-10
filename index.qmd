@@ -78,11 +78,265 @@ ggplot(vote_18)+
 
 # How to use Redistricting Data Hub's API
 
+
 The data for this project comes from Redistricting Data Hub, a nonpartisan organization that collects a number of sources of data related to redistricting efforts with the goal of providing resources and facilitating participation in the process. For each state, RDH collects a number of data sets related to district boundaries, election results, voter files, as well as demographics for each state from the American Community Survey. This level of access to a single stash of data makes RDH an ideal source of data for government groups, academics, and anyone interested in the redistricting process to access all the data they need to do analysis. 
 
 To aid in this, the Redistricting Data Hub has an API to locate and download all files related to a given state. We decided this would be the best approach to getting the data necessary for our analysis of Florida's redistricting process. Redistricting Data Hub has a slightly tedious process for accessing the API compared to other sources we have used. First, the individual requesting access must fill out a Google form located on RDH's website. Part of this process is a prompt to verify your identity by emailing a picture of the applicant holding a government issued ID. To complete the process someone at RDH must review your application and verify your identity. This process is more restrictive than most APIs and might be a bit cumbersome for some research applications. 
 
 From here, you have access to a GitHub repository where you can download a Python script (in the code blocks below) to download all the data for a state of interest. Researchers have the ability of downloading up to 4 states at a time, making this process relatively scalable depending upon the scope of your research. We followed these steps to download all files related to the state of Florida in Redistricting Data Hub's database. 
+
+```{python}
+#| eval : false
+
+#Import the four libraries needed to run the script. If you do not have these, you may need to install.
+import pandas as pd
+import requests
+import io
+from getpass import getpass
+import json
+import numpy as np}
+
+#Below is the baseurl used to retrieve the list of datasets on the website.
+baseurl = 'https://redistrictingdatahub.org/wp-json/download/list'
+
+"""This function retrieves a list of all datasets on the RDH site. In order to run, you must be an API user and registered with the RDH site.
+Inputs: username (string), password (string)
+Optional Inputs: baseurl"""
+
+def get_list(username, password, states, baseurl=baseurl):
+    print('Retrieving list of datasets on RDH Website...')
+    if type(states)!=type([]):
+        states = [states]
+    dfs = []
+    for i in states:
+        params = {}
+        params['username'] = username
+        params['password'] = password
+        params['format'] = 'csv'
+        params['states'] = i
+        r = requests.get(baseurl, params=params)
+        data = r.content
+        try:
+            df = pd.read_csv(io.StringIO(data.decode('utf-8')))
+        except:
+            print('There was an error retrieving the list of datasets, please check that you have the correct password and username')
+            return 
+        #display(df)
+        dfs.append(df)
+    df = pd.concat(dfs)
+    return df
+    
+  def check_string(string_list, row):
+    if len(string_list)==0:
+        return True
+    for i in string_list:
+        if i not in row:
+            return False
+    return True
+    
+  def check_states(state_list, row):
+    check_state = []
+    if state_list == ['']:
+        return True
+    else:
+        for i in state_list:
+            if i == row:
+                check_state.append(True)
+                return True
+            else:
+                check_state.append(False)
+        if any('True') in check_state:
+            return True
+        else:
+            return False
+                
+def assign_fullname(state):
+    state = state.lower()
+    keys = ['al','ak','az','ar','ca','co','ct','de','fl',
+              'ga','hi','id','il','in','ia','ks','ky','la','me',
+              'md','ma','mi','mn','ms','mo','mt','ne',
+              'nv','nh','nj','nm','ny','nc','nd','oh',
+              'ok','or','pa','ri','sc','sd','tn','tx',
+              'ut','vt','va','wa','wv','wi','wy']
+    values = ['Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','Florida',
+            'Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine',
+            'Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska',
+            'Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio',
+            'Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas',
+            'Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming']
+    values = [i.lower() for i in values]
+    dictionary = dict(zip(keys,values))
+    for k, v in dictionary.items():
+        if k == state:
+            return v
+        else:
+            continue
+    return state
+    
+def run_state_name(list_of_states):
+    new_list = []
+    for i in list_of_states:
+        state = assign_fullname(i)
+        new_list.append(state)
+    return new_list
+    
+def get_inputs(run_no = 1):
+    if run_no == 1:
+        username = str(input('RDH Username or email: '))
+        password = str(getpass(prompt='RDH Password: '))
+    print('You can retrieve datasets by state by typing out the full state name or postal code abbreviation (e.g. "Alabama" or "alabama" or "AL" or "al").')
+    print('If you would like data for multiple states, please separate by comma (e.g. "Wisconsin, mn").')
+    print('Because of the limits of WordPress API, it can only retrieve a list of datasets for one state at a time (since many states have nearly 1,000 datasets), so if you are requesting data from multiple states this step may take several minutes, please be patient.')
+    state = str(input('\nWhat state(s) do you want data for? Please separate by comma if multiple. '))
+    state = [i.strip() for i in state.split(',')]
+    state = [i.lower() for i in state]
+    state = run_state_name(state)
+    state = [i.lower() for i in state]
+
+    print('\nYou can filter datasets in the state(s) you designated with the criteria listed below. All filter options are case insensitive.')
+    print('You may search by year as YYYY for all years from 2010 to 2021.')
+    print('You may search by dataset type with the following names: ACS5, CVAP, Projection, election results, voter file, incumbent, disag.')
+    print('You may search by geogrpahy with the following: precinct, block, block group, census tract, vtd, county, state, aiannh, zctas, senate districts, legislative districts, congressional districts, house of represenative districts (or other district names for the SLDL or SLDU for a given state -- "districts" will retrieve all district boundaries).')
+    print('***Please note that if you would like to retrieve the official redistricting dataset for your state, please use "official" (no quotations) in your query. Not all states will produce an offical dataset.')
+    print('You may search by file type as CSV or SHP.')
+    string = str(input('\nAny other filtering parameters? Please separate by comma (e.g. "election results, 2016, SHP" etc). '))
+    string = [i.strip() for i in string.split(',')]
+    string = [i.lower() for i in string]
+    
+    if run_no ==1:
+        inputs = [username,password,state,string]
+    else:
+        inputs = [state,string]
+    return inputs
+    
+'''This function extracts the data that meets input specifications to the current working directory. In order to run, you must be an API user and registered with the RDH site.
+Inputs: username (string), password (string), state_name (string), add_string (list of strings)
+Output: N/A'''
+def get_data(run_no = 1,inputs=0,df = 0):
+    #get list of datasets
+    if (run_no == 1) or (run_no>1 and len(inputs)==1):
+        inputs = get_inputs()
+        username = inputs[0]
+        password = inputs[1]
+        state_name = inputs[2]
+        add_string = inputs[3]
+        df = get_list(username,password,state_name)
+    else:
+        username = inputs[0]
+        password = inputs[1]
+        inputs = get_inputs(run_no)
+        state_name = inputs[0]
+        add_string = inputs[1]
+        df = get_list(username,password,state_name)
+        inputs = [username,password,state_name,add_string]
+    #read in the list of data
+    for i in df.columns:
+        if 'Filter by state found 0 states or unknown states' in i:
+            print('*You did not specify the necessary states parameter.*')
+            inputs = [inputs[0],inputs[1],'fill','fill']#,df_save]
+            return inputs
+    if df.shape[0]<10:
+        print('\nYou either have an incorrect username/password or you are not a designated API user. To try again, please re-run.')
+        print('If you continue to have problems or would like to become an API user, please email info@redistrictingdatahub.org')
+        inputs = [0]
+        return inputs
+    params = {
+    'username': username,
+    'password': password}
+    #subset the df by the additional string info
+    df['Title_Format'] = df.apply(lambda x: ' '.join([x['Title'],x['Format']]),axis=1)
+    df['Subset'] = df['Title_Format'].apply(lambda x: check_string(add_string,x.lower()))
+    df = df[df['Subset']==True].copy()
+    #take all of the urls in the subset df and split them to just get the baseurl of the dataset (no params)
+    urls = list(df['URL'])
+    new_urls = []
+    id_dict = {}
+    for i in urls:
+        print(i)
+        new = i.split('?')[0]
+        dataset_id = i.split('&datasetid=')[1]
+        id_dict.update({new:dataset_id})
+        new_urls.append(new)
+    titles = list(df['Title_Format'])
+    if len(titles) == 0:
+        print('\nThere are no datasets that currently meet your criteria. Please re-run with different criteria to extract data.')
+        inputs = [inputs[0],inputs[1],'fill','fill']#,df_save]
+        return inputs
+    else:
+        titles = ', '.join(titles)
+        print('\nThe datasets to be extracted are: ', titles)
+    cont = str(input('\nWould you like to extract these datasets to your current working directory? (Yes/No) '))
+    ftype = list(df['Format'])
+    data = dict(zip(new_urls,ftype))
+    cont = cont.capitalize()
+    
+    if cont == 'Yes':
+        counter = 1
+        #iterate over all of the new urls and retrieve the data
+        for i in new_urls:
+            print('Retrieving', str(counter), 'of',str(len(new_urls)),' files')
+            #get the data from the url and the params listed above
+            params.update({'datasetid':id_dict.get(i)})
+            response = requests.get(i,params)
+            #get the file name of the dataset
+            file_name = i.split('%2F')[-1]
+            file_name = file_name.split('/')[-1]
+            file_name_no_zip = file_name.split('.')[0]
+            zipdot = '.'+file_name.split('.')[1]
+            #because we have multiple datasets with the same name (for CSV and SHP), but we may want SHP or CSV, we need to make them unique filenames
+            for k,v in data.items():
+                if k == i:
+                    dtype = '_'+v.lower()
+                else:
+                    continue
+            #new filename
+            if dtype in file_name_no_zip:
+                dtype = ''
+            file_name = file_name_no_zip+dtype+zipdot
+            print('Retrieving ', file_name)
+            #write the data
+            file = open(file_name, "wb")
+            file.write(response.content)
+            file.close()
+            counter = counter+1
+        print('\nDone extracting datasets to current working directory.')
+        print('Please re-run to extract additional data.')
+    else:
+        print('Data was not extracted. Please re-run if you would like to extract data.')
+    return inputs
+    
+def re_run(run_no, inputs):
+    run = str(input('\nWould you like to run a new extraction? (Yes/No) '))
+    run = run.capitalize()
+    if run == 'Yes':
+        print('\nStarting a new extraction..')
+        run_no = run_no+1
+        inputs = get_data(run_no,inputs)
+        re_run(run_no,inputs)
+    else:
+        print('\nThanks for using the RDH API tool! If you want to run again, please re-run the run() function (you will be asked for username/password again).')
+        return
+        
+def check_versions():
+    pd_check = str((pd.__version__))=='1.3.1'
+    req_check = str(requests.__version__) == '2.25.1'
+    np_check = str(np.__version__)=='1.20.3'
+    if pd_check == False:
+        print('WARNING: You do not have the correct version of pandas to run this script. This script may still work, but you may need to install pandas version 1.3.1 for this script to work.')
+    if req_check == False:
+        print('WARNING: You do not have the correct version of requests to run this script. This script may still work, but you may need to install requests version 2.25.1 for this script to work.')
+    if np_check == False:
+        print('WARNING: You do not have the correct version of numpy to run this script. This script may still work, but you may need to install numpy version 1.20.3 for this script to work.')
+    
+def run():
+    check_versions()
+    run_no = 1
+    inputs = get_data()
+    re_run(run_no,inputs)
+    
+run()
+```
+
 
 
 # Data Processing 
@@ -283,6 +537,45 @@ ggplot(data = data, mapping = aes(fill = redrawn)) +
        fill = "Was the Precinct Redrawn?") +
   theme(plot.title = element_text(face = "bold"),
         legend.title = element_text(face = "italic", size = 8))
+
+# Creating a new variable that identifies which gubernatorial candidate received the most votes in each precinct
+data_2 <- data %>%
+  mutate(candidate = case_when(
+    g18govrdes >= g18govdgil & g18govrdes >= g18govoric & g18govrdes >= g18govonpa ~ "g18govrdes",
+    g18govdgil >= g18govrdes & g18govdgil >= g18govoric & g18govdgil >= g18govonpa ~ "g18govdgil",
+    g18govoric >= g18govrdes & g18govoric >= g18govdgil & g18govoric >= g18govonpa ~ "g18govoric",
+    g18govonpa >= g18govrdes & g18govonpa >= g18govdgil & g18govonpa >= g18govoric ~ "g18govonpa",
+    TRUE ~ NA_character_
+  ))
+
+# Plotting the map
+plot1 <- ggplot() +
+  geom_sf(data = data_2, aes(fill = candidate), color = NA) +
+  theme_void() +
+  scale_fill_manual(values = c(g18govrdes = "red", g18govdgil = "blue", g18govoric = "green", g18govonpa = "orange"),
+                    labels = c(g18govrdes = "Ron DeSantis (R)", g18govdgil = "Andrew Gillum (D)", g18govoric = "Darcy G. Richardson (R)", g18govonpa = "No Party Affiliation")) +
+   labs(title = "Gubernatorial Candidate with most votes in the\n2018 general elections in Florida",
+       fill = "Most voted candidate") +
+  theme(plot.title = element_text(face = "bold"),
+        legend.title = element_text(face = "italic", size = 10))
+
+plot1
+
+# Map to show the voting behavior of those precints that were redrawn in 2022
+plot2 <- ggplot() +
+  geom_sf(data = data_2 %>% filter(redrawn == "TRUE"),
+          mapping = aes(fill = candidate), color = NA) +
+  theme_void() +
+  geom_sf(data = data %>% filter(redrawn == "FALSE"),
+          fill = "gray", color = NA) +
+  scale_fill_manual(values = c(g18govrdes = "red", g18govdgil = "blue", g18govoric = "green", g18govonpa = "orange"),
+                    labels = c(g18govrdes = "Ron DeSantis (R)", g18govdgil = "Andrew Gillum (D)", g18govoric = "Darcy G. Richardson (R)", g18govonpa = "No Party Affiliation")) +
+  labs(title = "Gubernatorial Candidate with most votes in the 2018\ngeneral elections in Florida (in redrawn precincts)",
+       fill = "Most voted candidate") +
+  theme(plot.title = element_text(face = "bold"),
+        legend.title = element_text(face = "italic", size = 10))
+
+plot2
 
 ```
 
