@@ -527,6 +527,41 @@ ggplot(data = data, mapping = aes(fill = redrawn)) +
   theme(plot.title = element_text(face = "bold"),
         legend.title = element_text(face = "italic", size = 8))
 
+# Creating a new variable that identifies which gubernatorial candidate received the most votes in each precinct
+data_2 <- data %>%
+  mutate(candidate = case_when(
+    g18govrdes >= g18govdgil & g18govrdes >= g18govoric & g18govrdes >= g18govonpa ~ "g18govrdes",
+    g18govdgil >= g18govrdes & g18govdgil >= g18govoric & g18govdgil >= g18govonpa ~ "g18govdgil",
+    g18govoric >= g18govrdes & g18govoric >= g18govdgil & g18govoric >= g18govonpa ~ "g18govoric",
+    g18govonpa >= g18govrdes & g18govonpa >= g18govdgil & g18govonpa >= g18govoric ~ "g18govonpa",
+    TRUE ~ NA_character_
+  ))
+
+# Plotting the map
+plot1 <- ggplot() +
+  geom_sf(data = data_2, aes(fill = candidate), color = NA) +
+  theme_void() +
+  scale_fill_manual(values = c(g18govrdes = "red", g18govdgil = "blue", g18govoric = "green", g18govonpa = "orange"),
+                    labels = c(g18govrdes = "Ron DeSantis (R)", g18govdgil = "Andrew Gillum (D)", g18govoric = "Darcy G. Richardson (R)", g18govonpa = "No Party Affiliation")) +
+   labs(title = "Gubernatorial Candidate with most votes in the\n2018 general elections in Florida",
+       fill = "Most voted candidate") +
+  theme(plot.title = element_text(face = "bold"),
+        legend.title = element_text(face = "italic", size = 10))
+
+# Map to show the voting behavior of those precints that were redrawn in 2022
+plot2 <- ggplot() +
+  geom_sf(data = data_2 %>% filter(redrawn == "TRUE"),
+          mapping = aes(fill = candidate), color = NA) +
+  theme_void() +
+  geom_sf(data = data %>% filter(redrawn == "FALSE"),
+          fill = "gray", color = NA) +
+  scale_fill_manual(values = c(g18govrdes = "red", g18govdgil = "blue", g18govoric = "green", g18govonpa = "orange"),
+                    labels = c(g18govrdes = "Ron DeSantis (R)", g18govdgil = "Andrew Gillum (D)", g18govoric = "Darcy G. Richardson (R)", g18govonpa = "No Party Affiliation")) +
+  labs(title = "Gubernatorial Candidate with most votes in the 2018\ngeneral elections in Florida (in redrawn precincts)",
+       fill = "Most voted candidate") +
+  theme(plot.title = element_text(face = "bold"),
+        legend.title = element_text(face = "italic", size = 10))
+
 ```
 
 The dispersion of redrawn precincts in Florida does not appear to be random where those in Central Florida were redistricted more than those on the coasts. We suspect underlying political motivations in Congressional redistricting. In order to test this assumption, we deploy a machine learning model with the following predictors: [fill in with variables we settle on]
