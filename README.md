@@ -15,3 +15,5 @@ We then used our data to develop a model to predict whether election results fro
 
 ### Reflection and Next Steps
 This project revealed the challenging nature of understanding characteristics at the precinct level and merging datasets of different geographic boundaries. Further demographic analysis could not be easily completed because census data is done at either district and tract levels, as well as precinct-level data was not yet available for the time period we were most interested in. Further analysis could try to be accomplished through attempting to merge and connect various shapefiles, waiting on the 2022 precinct-level data to come out, and examining other states for similar patterns. 
+
+Link to GitHub Page: https://benjaminrburnley.github.io/ppol670_final/
