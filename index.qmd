@@ -27,6 +27,7 @@ dist_18 = st_read("data/fl_cong_2015_to_2021/fl_cong_2015_to_2021.shp") %>%  # 2
 dist_22 = st_read("data/fl_cong_adopted_2022/P000C0109.shp") %>%  # 2022 Congressional District Map 
  clean_names() %>% 
   st_transform(crs = st_crs(dist_18))
+cvap_18 <- st_read("data/fl_cvap_2018_cd/fl_cvap_2018_cd.shp") 
 
 # voting data at precinct level for 2022
 vote_18 = st_read("data/fl_vest_18/fl_vest_18.shp") %>% 
@@ -50,6 +51,7 @@ When we set out on this process, our initial goal was to compare the geometries 
 
 
 # How to use Redistricting Data Hub's API
+
 
 The data for this project comes from Redistricting Data Hub, a nonpartisan organization that collects a number of sources of data related to redistricting efforts with the goal of providing resources and facilitating participation in the process. For each state, RDH collects a number of data sets related to district boundaries, election results, voter files, as well as demographics for each state from the American Community Survey. This level of access to a single stash of data makes RDH an ideal source of data for government groups, academics, and anyone interested in the redistricting process to access all the data they need to do analysis. 
 
@@ -580,7 +582,7 @@ ggplot(data = data, mapping = aes(fill = redrawn)) +
         legend.title = element_text(face = "italic", size = 8))
 
 # stats 
-data %>% 
+stat1 = data %>% 
   st_drop_geometry() %>% 
   group_by(redrawn) %>% 
   summarize(n = n(), percent = n/6071)
@@ -634,14 +636,16 @@ plot2 <- ggplot() +
 
 plot2
 
-data_2 %>% 
+stat2 = data_2 %>% 
   st_drop_geometry() %>% 
   group_by(redrawn) %>% 
   count(candidate)
 ```
 
-# Preparing the Dataset for Modeling
+# Machine Learning Model 
 
+We wanted to see how well the 2018 electoral results at a precinct level predicted whether a precinct was drawn into a new district with different representation. We explored this question using two machine learning models. The code for the process is shown below. We begin by setting up our cross validation using the v-fold method. From there the data is split into training and testing data. For the entire process, we used the popular `tidymodels` package to develop recipes and models for machine learning evaluation. This includes preprocessing steps like identifying non-numeric and categorical variables, addressing imbalances in our outcome variable, normalizing our predictors, and creating a dummy variable for the district to try to account for some geographic factors in the model. Below is the head of the processed training data.
+  
 ```{r}
 #| warning: false
 #| message: false
@@ -652,30 +656,10 @@ summary(data$redrawn)
 
 # select variables for model and change types for optimal use
 redrawn_sf = data %>%
-<<<<<<< HEAD
   select(-district_18, -district_22) %>%
-=======
-  select(-district_22) %>%
->>>>>>> 76910f410d984c4230111ef9cf11d811dfd25fa7
   mutate_if(is.logical, factor) %>%
   st_drop_geometry()
 
-```
-
-# Machine Learning Model 
-
-<<<<<<< HEAD
-We wanted to see how well the 2018 electoral results at a precinct level predicted whether a precinct was drawn into a new district with different representation. We explored this question using two machine learning models. The code for the process is shown below. We begin by setting up our cross validation using the v-fold method. From there the data is split into training and testing data. For the entire process, we used the popular `tidymodels` package to develop recipes and models for machine learning evaluation. This includes preprocessing steps like identifying non-numeric and categorical variables, addressing imbalances in our outcome variable, normalizing our predictors, and creating a dummy variable for the district to try to account for some geographic factors in the model.
-  
-```{r}
-=======
-** SECTION ON MACHINE LEARNING PROCESS **
-  
-  ```{r}
->>>>>>> 76910f410d984c4230111ef9cf11d811dfd25fa7
-#| warning: false
-#| message: false
-#| code-fold: true
 
 set.seed(1234)
 
@@ -699,11 +683,7 @@ redrawn_rec = recipe(redrawn ~ ., data = data_train) %>%
   # mean-center predictors
   step_normalize(all_numeric_predictors()) %>%
   # dummy split variable
-<<<<<<< HEAD
   step_dummy(district_no_18) %>%
-=======
-  step_dummy(district_18) %>%
->>>>>>> 76910f410d984c4230111ef9cf11d811dfd25fa7
   prep()
 
 # see engineered training data
@@ -717,8 +697,6 @@ The first machine learning model will be a simple logistic regression in order t
 #| warning: false
 #| message: false
 #| code-fold: true
-
-set.seed(2345)
 
 set.seed(2345)
 
@@ -751,19 +729,13 @@ logistic_fit = logistic_final_wf %>%
   fit(data = data_train)
 
 ```
-<<<<<<< HEAD
 
 After having set a baseline of performance with the logistic regression model, implemented with 10-fold cross validation, the next step is to deploy another model and evaluate its performance relative to this baseline. The following Random Forest model will include the same cross-validation as well as hyper parameter tuning for the number of predictors used at each split and the minimum number of data points needed for a node split to occur.
-=======
-After having set a baseline of performance with the logistic regression model, implemented with 10-fold cross validation, the next step is to deploy another model and evaluate its performance relative to this baseline. The following Random Forest model will include the same cross-validation as well as hyperparameter tuning.
->>>>>>> 76910f410d984c4230111ef9cf11d811dfd25fa7
 
 ```{r}
 #| warning: false
 #| message: false
 #| code-fold: true
-
-set.seed(3456)
 
 set.seed(3456)
 
@@ -790,17 +762,10 @@ rf_tune_res = tune_grid(
 bind_rows(
   rf_tune_res %>% show_best("accuracy", n = 1),
   rf_tune_res %>% show_best("roc_auc", n = 1))
-<<<<<<< HEAD
 
 ### attempted further hyper parameter tuning but best results were from
 ### original tune grid
 
-=======
-
-### attempted further hyperparameter tuning but best results were from
-### original tune grid
-
->>>>>>> 76910f410d984c4230111ef9cf11d811dfd25fa7
 # based on best ROC, mtry = 59 and min_n = 13
 # create grid for ranges with these values
 # rf_grid_reg = grid_regular(
@@ -821,7 +786,6 @@ bind_rows(
 
 # pull out best performing hyperparameters based on ROC metric
 rf_best_roc = select_best(rf_tune_res, "roc_auc")
-<<<<<<< HEAD
 
 # finalize workflow for fitting data with parameters from model with best ROC
 rf_final_wf = finalize_workflow(rf_wf, parameters = rf_best_roc)
@@ -840,20 +804,6 @@ The plot below displays the most important variables in predicting whether a pre
 #| message: false
 #| code-fold: true
 
-=======
-
-# finalize workflow for fitting data with parameters from model with best ROC
-rf_final_wf = finalize_workflow(rf_wf, parameters = rf_best_roc)
-
-# fit final model to training data and extract parsnip model object
-rf_final_fit = fit(rf_final_wf, data = data_train)
-
-```
-
-## Determine Variable Importance
-```{r}
-
->>>>>>> 76910f410d984c4230111ef9cf11d811dfd25fa7
 # add best ROC to model parameters
 rf_final_mod = finalize_model(
   rf_tune_spec,
@@ -868,16 +818,9 @@ rf_final_mod %>%
   vip::vip(geom = "point") +
   theme_classic() +
   theme(panel.grid.major = element_line())
-<<<<<<< HEAD
 ```
 
 Below are the several diagnostic metrics for the model. The model has 77% accuracy, meaning it correctly classifies the redistricting change in over three-quarters of the cases. The recall of the model was 76%, meaning that of the precincts that experienced a change, the model correctly predicted just over three-quarters of the cases. Lastly, the models specificity, which measures the number of true negatives the model correctly predicted, was 78%. 
-=======
-
-```
-
-## Predictions with the Testing Data
->>>>>>> 76910f410d984c4230111ef9cf11d811dfd25fa7
 
 ```{r}
 #| warning: false
@@ -895,7 +838,6 @@ prediction = bind_cols(
 bind_rows(
   accuracy(prediction, truth = actual_redrawn, estimate = predicted_redrawn),
   recall(prediction, truth = actual_redrawn, estimate = predicted_redrawn),
-<<<<<<< HEAD
   specificity(prediction, truth = actual_redrawn, estimate = predicted_redrawn),
   precision(prediction, truth = actual_redrawn, estimate = predicted_redrawn)) %>%
   select(.metric, .estimate)
@@ -915,22 +857,6 @@ actual = data_test %>%
 preds = predict(rf_final_fit, new_data = data_test, type = "prob")
 
 results = bind_cols(actual, preds)
-=======
-  specificity(prediction, truth = actual_redrawn, estimate = predicted_redrawn)) %>%
-  select(.metric, .estimate)
-
-```
-
-## Receiver Operating Characteristics Curve
-
-```{r}
-
-bind_cols(
-  `actual` = data_test$redrawn,
-  predict(rf_final_fit, new_data = data_test, type = "prob")) %>%
-  roc_curve(truth = actual, estimate = .pred_FALSE) %>%
-  autoplot()
->>>>>>> 76910f410d984c4230111ef9cf11d811dfd25fa7
 
 results %>% 
   roc_curve(truth = redrawn, .pred_FALSE) %>%
@@ -946,7 +872,6 @@ This first plot identifies the Congressional districts with the highest Black po
 #| message: false
 #| code-fold: true
 
-cvap_18 <- st_read("data/fl_cvap_2018_cd/fl_cvap_2018_cd.shp") 
 
 # Data Visualization of Black population
 cvap_18$percent <- (cvap_18$ALL_BLK18 / cvap_18$ALL_TOT18) * 100
@@ -1016,6 +941,10 @@ white_percent
 ```
 Finally, here is the breakdown of demographics for each of top 3 districts identified by our model: District 13 (Tampa), District 5 (Jacksonville/North Florida), and District 7 (North Orlando).
 ```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+
 # Data Vis. of Race Estimates for District 13
 cvap_dist13 <- cvap_18 %>%
   filter(DIST=="Congressional District 13 (116th Congress)") %>%
@@ -1045,6 +974,9 @@ ggplot(aes(x = Race, y = Count, fill= Count)) +
 dist13_raceplot
 ```
 ```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
 
 # Data Vis. of Race Estimates for District 5
 cvap_dist5 <- cvap_18 %>%
@@ -1075,6 +1007,10 @@ dist5_raceplot <- cvap_dist5 %>%
 dist5_raceplot
 ```
 ```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+
 # Data Vis. of Race Estimates for District 5
 cvap_dist7 <- cvap_18 %>%
   filter(DIST=="Congressional District 7 (116th Congress)") %>%
