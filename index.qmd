@@ -78,7 +78,6 @@ ggplot(vote_18)+
 
 # How to use Redistricting Data Hub's API
 
-
 The data for this project comes from Redistricting Data Hub, a nonpartisan organization that collects a number of sources of data related to redistricting efforts with the goal of providing resources and facilitating participation in the process. For each state, RDH collects a number of data sets related to district boundaries, election results, voter files, as well as demographics for each state from the American Community Survey. This level of access to a single stash of data makes RDH an ideal source of data for government groups, academics, and anyone interested in the redistricting process to access all the data they need to do analysis. 
 
 To aid in this, the Redistricting Data Hub has an API to locate and download all files related to a given state. We decided this would be the best approach to getting the data necessary for our analysis of Florida's redistricting process. Redistricting Data Hub has a slightly tedious process for accessing the API compared to other sources we have used. First, the individual requesting access must fill out a Google form located on RDH's website. Part of this process is a prompt to verify your identity by emailing a picture of the applicant holding a government issued ID. To complete the process someone at RDH must review your application and verify your identity. This process is more restrictive than most APIs and might be a bit cumbersome for some research applications. 
@@ -337,8 +336,6 @@ def run():
 run()
 ```
 
-
-
 # Data Processing 
 
 For our analysis, we ended up primarily relying on three data sets. The first two are the Congressional District maps from Florida's Redistricting process. The first map was utilized for all elections between 2018 and 2020. The second map is the new map that was redrawn for the 2020 redistricting process and used in the 2022 midterms. Last, we used the precinct level voting results from the Voting and Elections Science Team (VEST). During this process we ran into one of the first hurdles in pursuing our ideal project. The plan had been to compare precinct level results across two maps. While precincts are often redrawn with Congressional districts, our aim was to see if a precinct had been drawn into a new district during redistricting, quantify the degree to which this was the case, and then see how this impacted factors like turnout and partisan vote. Unfortunately for our project, no one has joined 2022 midterm results with precinct shapefiles yet and so this approach is not yet feasible. We briefly considered using the only available location data in the 2022 precinct data, polling location name and county, to geocode polling location into point data. This would at least let us compare the district the precinct was within during the 2018 cycle to the district the polling location was in during the 2022 cycle. With only location name for over 6,000 precincts this felt both unfeasible and susceptible to mistakes. Had the data included precinct address, we could have coded point data using `tidygeocoder`.
@@ -584,50 +581,57 @@ The dispersion of redrawn precincts in Florida does not appear to be random wher
 # Preparing the Dataset for Modeling
 
 ```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
 
 # checking for class imbalances
 summary(data$redrawn)
 
 # select variables for model and change types for optimal use
 redrawn_sf = data %>%
-  select(pct_std, county, precinct,
-         g18ussrsco, g18ussdnel, g18govdgil, g18govrdes,
-         redrawn, -geometry) %>%
+  select(-district_22) %>%
   mutate_if(is.logical, factor) %>%
   st_drop_geometry()
-
-redrawn_sf
 
 ```
 
 # Machine Learning Model 
 
 ** SECTION ON MACHINE LEARNING PROCESS **
-
-```{r}
+  
+  ```{r}
 #| warning: false
 #| message: false
 #| code-fold: true
 
-set.seed(20230510)
+set.seed(1234)
 
 # set up v fold cross validation
 folds = vfold_cv(redrawn_sf, folds = 10, repeats = 1)
 
 # split precinct data into training and testing data
-split = initial_split(redrawn_sf, strata = redrawn)
+split = initial_split(redrawn_sf)
 data_train = training(split)
 data_test = testing(split)
 
 # create recipe
 redrawn_rec = recipe(redrawn ~ ., data = data_train) %>%
   # update roles of variables to not be used in the model but want to keep
-  # for potentiala future use
-  update_role(pct_std, county, precinct, new_role = "ID") %>%
-  # standardize numeric variables
-  step_center(all_numeric_predictors()) %>%
-  step_scale(all_numeric_predictors()) %>%
+  # for future reference
+  update_role(pct_std, new_role = "ID") %>%
+  update_role(county, new_role = "ID") %>%
+  update_role(precinct, new_role = "ID") %>%
+  # down sample redrawn to address class imbalance
+  themis::step_downsample(redrawn) %>%
+  # mean-center predictors
+  step_normalize(all_numeric_predictors()) %>%
+  # dummy split variable
+  step_dummy(district_18) %>%
   prep()
+
+# see engineered training data
+bake(redrawn_rec, new_data = data_train)
 
 ```
 
@@ -635,9 +639,11 @@ The first machine learning model will be a simple logistic regression in order t
 
 ```{r}
 
+set.seed(2345)
+
 # set basic logistic regression model
 logistic_mod = logistic_reg(mode = "classification",
-                             engine = "glm")
+                            engine = "glm")
 
 # feed recipe and model to a logistic regression workflow
 logistic_wf = workflow() %>%
@@ -648,27 +654,32 @@ logistic_wf = workflow() %>%
 logistic_cv = logistic_wf %>%
   fit_resamples(resamples = folds, control = control_resamples(save_pred = TRUE))
 
-# see available metrics
-logistic_cv %>% unnest(.metrics)
 # show best metrics
 logistic_cv %>% collect_metrics()
+
 # pull out best model according to ROC metric
 logistic_best_roc = logistic_cv %>%
   select_best(metric = "roc_auc")
 
 # implement final workflow based on best model
 logistic_final_wf = finalize_workflow(logistic_wf,
-                                       parameters = logistic_best_roc)
+                                      parameters = logistic_best_roc)
+
+# fit final workflow to training data
+logistic_fit = logistic_final_wf %>%
+  fit(data = data_train)
 
 ```
-After having set a baseline of performance with the logistic regression model, implemented with 10-fold cross validation, the next step is to deploy several other models and evaluate their performance relative to this baseline. The following Random Forest model will include the same cross-validation as well as hyperparameter tuning.
+After having set a baseline of performance with the logistic regression model, implemented with 10-fold cross validation, the next step is to deploy another model and evaluate its performance relative to this baseline. The following Random Forest model will include the same cross-validation as well as hyperparameter tuning.
 
 ```{r}
 
+set.seed(3456)
+
 # set model specifications
 rf_tune_spec = rand_forest(mtry = tune(),
-            trees = 100,
-            min_n = tune()) %>%
+                           trees = 100,
+                           min_n = tune()) %>%
   set_mode("classification") %>%
   set_engine("ranger")
 
@@ -684,66 +695,92 @@ rf_tune_res = tune_grid(
   grid = 20
 )
 
-rf_tune_res %>% unnest(.metrics)
-rf_tune_res %>% collect_metrics()
-rf_tune_res %>% select_best("roc_auc")
+# show best ROC AUC and accuracy
+bind_rows(
+  rf_tune_res %>% show_best("accuracy", n = 1),
+  rf_tune_res %>% show_best("roc_auc", n = 1))
 
-# based on best ROC, mtry = 1 and min_n = 28
+### attempted further hyperparameter tuning but best results were from
+### original tune grid
+
+# based on best ROC, mtry = 59 and min_n = 13
 # create grid for ranges with these values
-rf_grid_reg = grid_regular(
-  mtry(range = c(0,5)),
-  min_n(range = c(20, 40)),
-  levels = 5
-)
+# rf_grid_reg = grid_regular(
+# mtry(range = c(30,60)),
+# min_n(range = c(9,20)),
+# levels = 4
+# )
 
 # tune hyperparameters again based on new grid
-rf_grid_reg_res = tune_grid(
-  rf_wf,
-  resamples = folds,
-  grid = rf_grid_reg
-)
+# rf_grid_reg_res = tune_grid(
+# rf_wf,
+# resamples = folds,
+# grid = rf_grid_reg
+# )
 
-rf_grid_reg_res %>% unnest(.metrics)
-rf_grid_reg_res %>% collect_metrics()
+# show best ROC AUC
+# rf_grid_reg_res %>% show_best("roc_auc")
+
 # pull out best performing hyperparameters based on ROC metric
-rf_best_roc = rf_grid_reg_res %>%
-  select_best("roc_auc")
+rf_best_roc = select_best(rf_tune_res, "roc_auc")
 
+# finalize workflow for fitting data with parameters from model with best ROC
+rf_final_wf = finalize_workflow(rf_wf, parameters = rf_best_roc)
+
+# fit final model to training data and extract parsnip model object
+rf_final_fit = fit(rf_final_wf, data = data_train)
+
+```
+
+## Determine Variable Importance
+```{r}
+
+# add best ROC to model parameters
 rf_final_mod = finalize_model(
   rf_tune_spec,
   rf_best_roc
 )
 
+# visualize variable importance
 rf_final_mod %>%
   set_engine("ranger", importance = "permutation") %>%
   fit(redrawn ~ ., data = juice(redrawn_rec) %>%
         select(-pct_std, -county, -precinct)) %>%
-  vip::vip(geom = "point")
-
-rf_final_wf = workflow() %>%
-  add_recipe(redrawn_rec) %>%
-  add_model(rf_final_mod)
-
-rf_final_fit = fit(rf_final_wf, data_train)
+  vip::vip(geom = "point") +
+  theme_classic() +
+  theme(panel.grid.major = element_line())
 
 ```
 
-## Estimate the Out of Sample Error Rate
+## Predictions with the Testing Data
 
 ```{r}
 
-data_test_predictions = predict(rf_final_fit, new_data = data_test)
-
+# create data frame that has whether a district was actually redrawn
+# and the model's prediction for whether it was redrawn
 prediction = bind_cols(
   `actual_redrawn` = data_test$redrawn,
-  `predicted_redrawn` = data_test_predictions$.pred_class
+  `predicted_redrawn` = (predict(rf_final_fit, new_data = data_test))$.pred_class
 )
 
-accuracy(prediction, truth = actual_redrawn, estimate = predicted_redrawn)
-recall(prediction, truth = actual_redrawn, estimate = predicted_redrawn)
-specificity(prediction, truth = actual_redrawn, estimate = predicted_redrawn)
+# combine metrics into single data frame
+bind_rows(
+  accuracy(prediction, truth = actual_redrawn, estimate = predicted_redrawn),
+  recall(prediction, truth = actual_redrawn, estimate = predicted_redrawn),
+  specificity(prediction, truth = actual_redrawn, estimate = predicted_redrawn)) %>%
+  select(.metric, .estimate)
 
+```
 
+## Receiver Operating Characteristics Curve
+
+```{r}
+
+bind_cols(
+  `actual` = data_test$redrawn,
+  predict(rf_final_fit, new_data = data_test, type = "prob")) %>%
+  roc_curve(truth = actual, estimate = .pred_FALSE) %>%
+  autoplot()
 
 ```
 
