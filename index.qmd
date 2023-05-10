@@ -19,6 +19,7 @@ library(spatialsample)
 library(sf)
 library(patchwork)
 library(janitor)
+library(mapview)
 
 # data import 
 dist_18 = st_read("data/fl_cong_2015_to_2021/fl_cong_2015_to_2021.shp") %>%  # 2015-2021 Congressional District Map 
@@ -43,37 +44,9 @@ st_crs(vote_18) == st_crs(dist_18)
 st_crs(vote_18) == st_crs(dist_22)
 ```
 
-This project examines the effect of the redistricting process on voter turnout. We use the change in maps from 2020 to 2022 in the state of Florida as a case study to examine this effect. 
+Redistricting is a key process in guaranteeing representation in American democracy. Dictated by the Constitution to ensure that Americans are equally represented in the House of Representatives, the decennial process has been part of the politics since the country's beginnings. A by-product of this is that those in power have the ability to draw districts in a way that may favor their party for the coming decade. The most extreme version of this - known as gerrymandering - has a long history in the United States and often brings to mind districts with strange geometric features or no discernible geographic constituency. While this is the most egregious version of what can be done in the redistricting process, large portions of the state are moved into new districts impacting their representation and potentially changing the autonomy of individuals who are redrawn. This project seeks to better understand the redistricting process using spatial analysis and machine learning. We focus explicitly on Florida, a state that received a lot of attention in the most recent redistricting process, where Republicans redrew districts to give themselves four additional Republican-leaning districts and eliminated 3 highly competitive districts. 
 
-```{r}
-#| warning: false
-#| message: false
-#| code-fold: true
-
-# plots comparing two maps 
-plot1 = ggplot(dist_18)+
-  geom_sf(fill = "white")+
-  theme_void()+
-  ggtitle("2015-2021 Map")
-
-plot2 = ggplot(dist_22)+
-  geom_sf(fill = "white")+
-  theme_void()+
- ggtitle("2022 Map")
-
-plot1 + plot2
-```
-
-```{r}
-#| warning: false
-#| messages: false
-#| code-fold: true
-
-# plot of precincts 
-ggplot(vote_18)+
-  geom_sf()+
-  theme_void()
-```
+When we set out on this process, our initial goal was to compare the geometries of precincts from both the old and new maps to determine what happened to voting patterns when a precinct moved districts. In the process of developing the project, we realized that there is not yet spatial data that includes precinct level results and their respective shapefile. Though this makes our initial goal no longer possible, we opted for another approach: could we predict which districts were redrawn based on the results of the 2018 election? While partisan gerrymandering is not illegal in the United States, political factors being strong predictors of redistricting probability would tell a strong story about the motives and the nature of redistricting. We find that the story is a bit more complex. 
 
 
 # How to use Redistricting Data Hub's API
@@ -86,7 +59,8 @@ To aid in this, the Redistricting Data Hub has an API to locate and download all
 From here, you have access to a GitHub repository where you can download a Python script (in the code blocks below) to download all the data for a state of interest. Researchers have the ability of downloading up to 4 states at a time, making this process relatively scalable depending upon the scope of your research. We followed these steps to download all files related to the state of Florida in Redistricting Data Hub's database. 
 
 ```{python}
-#| eval : false
+#| eval: false
+
 
 #Import the four libraries needed to run the script. If you do not have these, you may need to install.
 import pandas as pd
@@ -337,17 +311,16 @@ def run():
 run()
 ```
 
-
-
 # Data Processing 
 
 For our analysis, we ended up primarily relying on three data sets. The first two are the Congressional District maps from Florida's Redistricting process. The first map was utilized for all elections between 2018 and 2020. The second map is the new map that was redrawn for the 2020 redistricting process and used in the 2022 midterms. Last, we used the precinct level voting results from the Voting and Elections Science Team (VEST). During this process we ran into one of the first hurdles in pursuing our ideal project. The plan had been to compare precinct level results across two maps. While precincts are often redrawn with Congressional districts, our aim was to see if a precinct had been drawn into a new district during redistricting, quantify the degree to which this was the case, and then see how this impacted factors like turnout and partisan vote. Unfortunately for our project, no one has joined 2022 midterm results with precinct shapefiles yet and so this approach is not yet feasible. We briefly considered using the only available location data in the 2022 precinct data, polling location name and county, to geocode polling location into point data. This would at least let us compare the district the precinct was within during the 2018 cycle to the district the polling location was in during the 2022 cycle. With only location name for over 6,000 precincts this felt both unfeasible and susceptible to mistakes. Had the data included precinct address, we could have coded point data using `tidygeocoder`.
 
-From here, we decided that the best approach would be to try to say something about the redistricting process given the data we had. The process we decided on was to determine whether a precinct had been  
+From here, we decided that the best approach would be to try to say something about the redistricting process given the data we had. The process we agreed on was to attempt to predict whether a precinct was drawn into a new district in the 2022 map based on the 2018 electoral results. To do this, we used the shapefiles for each precinct in the 2018 map and checked to see what Congressional district it was in for the 2018 cycle. We repeated this process for the 2022 Congressional districts map. Using this spatial overlap, we identified the precincts that were moved from one district to another. Of the 6,071 precincts in the 2018 map, 58.7% (3568 precincts) were drawn into a new Congressional district for the 2022 cycle. This total number includes precincts that had been split across districts in 2018, but were completely within a new district in 2022 as well as the opposite scenario where a precinct was split in the 2022 cycle. Combined with the election return results at the precinct level, we now have our outcome variable. 
 
 ```{r}
 #| warning: false
 #| message: false
+#| code-fold: true
 
 # loop for creating district 2018 objects 
 districts_18 <- list()
@@ -404,6 +377,36 @@ dist18_df = data.frame(dist_1 = within_18_1,
 
 data_18 = dist18_df %>% 
   mutate(district_18 = case_when(
+    dist_1 == TRUE ~ "R",
+    dist_2 == TRUE ~ "R",
+    dist_3 == TRUE ~ "R", 
+    dist_4 == TRUE ~ "R",
+    dist_5 == TRUE ~ "D", 
+    dist_6 == TRUE ~ "R", 
+    dist_7 == TRUE ~ "D", 
+    dist_8 == TRUE ~ "R",
+    dist_9 == TRUE ~ "D", 
+    dist_10 == TRUE ~ "D", 
+    dist_11 == TRUE ~ "R", 
+    dist_12 == TRUE ~ "R", 
+    dist_13 == TRUE ~ "D", 
+    dist_14 == TRUE ~ "D", 
+    dist_15 == TRUE ~ "R", 
+    dist_16 == TRUE ~ "R",
+    dist_17 == TRUE ~ "R", 
+    dist_18 == TRUE ~ "R", 
+    dist_19 == TRUE ~ "R",
+    dist_20 == TRUE ~ "D", 
+    dist_21 == TRUE ~ "D", 
+    dist_22 == TRUE ~ "D",
+    dist_23 == TRUE ~ "D", 
+    dist_24 == TRUE ~ "D", 
+    dist_25 == TRUE ~ "R", 
+    dist_26 == TRUE ~ "R",
+    dist_27 == TRUE ~ "R", 
+    TRUE ~ "Split"
+  )) %>% 
+  mutate(district_no_18 = case_when(
     dist_1 == TRUE ~ "District 1",
     dist_2 == TRUE ~ "District 2",
     dist_3 == TRUE ~ "District 3", 
@@ -465,34 +468,34 @@ dist22_df = data.frame(dist_1 = within_22_1,
 
 data_22 = dist22_df %>% 
   mutate(district_22 = case_when(
-    dist_1 == TRUE ~ "District 1",
-    dist_2 == TRUE ~ "District 2",
-    dist_3 == TRUE ~ "District 3", 
-    dist_4 == TRUE ~ "District 4",
-    dist_5 == TRUE ~ "District 5", 
-    dist_6 == TRUE ~ "District 6", 
-    dist_7 == TRUE ~ "District 7", 
-    dist_8 == TRUE ~ "District 8",
-    dist_9 == TRUE ~ "District 9", 
-    dist_10 == TRUE ~ "District 10", 
-    dist_11 == TRUE ~ "District 11", 
-    dist_12 == TRUE ~ "District 12", 
-    dist_13 == TRUE ~ "District 13", 
-    dist_14 == TRUE ~ "District 14", 
-    dist_15 == TRUE ~ "District 15", 
-    dist_16 == TRUE ~ "District 16",
-    dist_17 == TRUE ~ "District 17", 
-    dist_18 == TRUE ~ "District 18", 
-    dist_19 == TRUE ~ "District 19",
-    dist_20 == TRUE ~ "District 20", 
-    dist_21 == TRUE ~ "District 21", 
-    dist_22 == TRUE ~ "District 22",
-    dist_23 == TRUE ~ "District 23", 
-    dist_24 == TRUE ~ "District 24", 
-    dist_25 == TRUE ~ "District 25", 
-    dist_26 == TRUE ~ "District 26",
-    dist_27 == TRUE ~ "District 27", 
-    dist_28 == TRUE ~ "District 28",
+    dist_1 == TRUE ~ "R",
+    dist_2 == TRUE ~ "R",
+    dist_3 == TRUE ~ "R", 
+    dist_4 == TRUE ~ "R",
+    dist_5 == TRUE ~ "R", 
+    dist_6 == TRUE ~ "R", 
+    dist_7 == TRUE ~ "R", 
+    dist_8 == TRUE ~ "R",
+    dist_9 == TRUE ~ "D", 
+    dist_10 == TRUE ~ "D", 
+    dist_11 == TRUE ~ "R", 
+    dist_12 == TRUE ~ "R", 
+    dist_13 == TRUE ~ "R", 
+    dist_14 == TRUE ~ "D", 
+    dist_15 == TRUE ~ "R", 
+    dist_16 == TRUE ~ "R",
+    dist_17 == TRUE ~ "R", 
+    dist_18 == TRUE ~ "R", 
+    dist_19 == TRUE ~ "R",
+    dist_20 == TRUE ~ "D", 
+    dist_21 == TRUE ~ "R", 
+    dist_22 == TRUE ~ "D",
+    dist_23 == TRUE ~ "D", 
+    dist_24 == TRUE ~ "D", 
+    dist_25 == TRUE ~ "D", 
+    dist_26 == TRUE ~ "R",
+    dist_27 == TRUE ~ "R", 
+    dist_28 == TRUE ~ "R",
     TRUE ~ "Split"
   ))
 
@@ -500,43 +503,96 @@ data_22 = dist22_df %>%
 data_both = data_18 %>% 
   bind_cols(data_22) %>% 
   mutate(redrawn = if_else(district_18 == district_22, FALSE, TRUE)) %>% 
-  dplyr::select(district_18, district_22, redrawn)
+  dplyr::select(district_no_18, district_18, district_22, redrawn)
 
 # data frame with column indicating whether a precinct was drawn into a new district
 data = vote_18 %>% 
   bind_cols(data_both)
+
+head(data)
 ```
 
 # Visualizations 
 
-** SECTION ON DATA VISUALIZATIONS ** 
+To get a sense of how redistricting changed over the course of the two cycles, we've produced a number of visualizations. This first visualization shows the changes in the Congressional districts between the two maps. Most notably, you can see how some of the Congressional districts have changed shape particularly in the panhandle. Additionally, Florida gained an additional district after the 2020 Census, so some districts change their number between the two maps. Below that, we have included an overlay of the two maps, with red lines representing old Congressional districts and blue lines representing new Congressional districts. You can see that in certain circumstances, as is the case with District 8, there is essentially no change between maps. Others, like District 18 simply gets renamed in 2022 to be District 21, but does not change its geographic shape. Areas around cities have the most change in terms of where district lines shift. 
 ```{r}
 #| warning: false
 #| message: false
 #| code-fold: true
 
+# plots comparing two maps 
+plot1 = ggplot(dist_18)+
+  geom_sf(fill = "white")+
+  geom_sf_label(aes(label = district))+
+  theme_void()+
+  ggtitle("2015-2021 Map")
+
+plot2 = ggplot(dist_22)+
+  geom_sf(fill = "white")+
+  geom_sf_label(aes(label = district))+
+  theme_void()+
+  ggtitle("2022 Map")+
+  labs(
+    caption = "Source: Redistricting Data Hub"
+  )
+
+plot1 + plot2
+
 # map of overlapping geometries 
 ggplot()+
   geom_sf(data = dist_18, color = "red", alpha = 0, lwd = 1) +
-  geom_sf(data = dist_22, color = "blue", alpha = 0, lwd = 0.5) + 
+  geom_sf(data = dist_22, color = "blue", alpha = 0, lwd = 1) + 
   theme_void()+
   labs(
     title = "Overlay of Old and New Districts ",
-    subtitle = "Red lines are old borders, purple lines are unchanged, blue lines are new borders",
+    subtitle = "Red lines are old borders, blue lines are new borders",
   )+
   theme(
     plot.title = element_text(face = "bold"),
     plot.subtitle = element_text(face = "italic", size = "8")
   )
 
+```
+Precincts are much smaller geographical units and so it helps to have an interactive map like the one below. Some precincts have a large geographic area, but those in urban areas can be as small as several blocks. As you can see, a large number of precincts are split between Congressional districts. The chart below shows whether a precinct was represented by a Democrat, a Republican, or whether the precinct was split between Congressional districts after the 2018 midterm elections.
+```{r}
+#| warning: false
+#| messages: false
+#| code-fold: true
+
+# plot of precincts 
+mapview(data, zcol = "district_18", col.regions = list("blue", "red", "grey"))
+```
+
+The plot below explores our main outcome variable of interest: whether a precinct had change in representation after the redistricting process. Almost 70% of precincts do not experience change in partisan representation after redistricting. There are however 1884 precincts whose representation changes as a result of redistricting and other political factors. These precincts are clustered throughout the state.
+
+```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+
 # map of districts and whether they were redrawn
 ggplot(data = data, mapping = aes(fill = redrawn)) +
   geom_sf(alpha = 0.9, color = NA) +
   theme_void() +
   labs(title = "Redrawn Precincts",
-       fill = "Was the Precinct Redrawn?") +
+       fill = "Did Precinct Representation Change Parties?",
+       caption = "Source: Redistricting Data Hub") +
   theme(plot.title = element_text(face = "bold"),
         legend.title = element_text(face = "italic", size = 8))
+
+# stats 
+data %>% 
+  st_drop_geometry() %>% 
+  group_by(redrawn) %>% 
+  summarize(n = n(), percent = n/6071)
+```
+
+We can also explore the relationship between the redistricting process and state level electoral factors such as a precinct's support for Governor Ron Desantis in the 2018 election. The first map shows the results of 2018 Gubernatorial Election by precinct. Ron Desantis does extremely well in suburban and rural areas whereas his challenger. The second plot shows the same results but only shaded in if a district had was drawn into a new district and had a change in representation. Of the 4,187 precincts that did not experience a change in representation, 55% of them voted for Ron Desantis in the 2018 Gubernatorial Election. Of the 1,114 precincts that did have a change in district representation, 47% voted for Desantis. This seems to suggest that Republican districts were slightly less likely to be redrawn, however this difference in probability is relatively small. 
+
+```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
 
 # Creating a new variable that identifies which gubernatorial candidate received the most votes in each precinct
 data_2 <- data %>%
@@ -555,13 +611,14 @@ plot1 <- ggplot() +
   scale_fill_manual(values = c(g18govrdes = "red", g18govdgil = "blue", g18govoric = "green", g18govonpa = "orange"),
                     labels = c(g18govrdes = "Ron DeSantis (R)", g18govdgil = "Andrew Gillum (D)", g18govoric = "Darcy G. Richardson (R)", g18govonpa = "No Party Affiliation")) +
    labs(title = "Gubernatorial Candidate with most votes in the\n2018 general elections in Florida",
-       fill = "Most voted candidate") +
+       fill = "Most voted candidate",
+       caption = "Source: Redistricting Data Hub") +
   theme(plot.title = element_text(face = "bold"),
         legend.title = element_text(face = "italic", size = 10))
 
 plot1
 
-# Map to show the voting behavior of those precints that were redrawn in 2022
+# Map to show the voting behavior of those precincts that were redrawn in 2022
 plot2 <- ggplot() +
   geom_sf(data = data_2 %>% filter(redrawn == "TRUE"),
           mapping = aes(fill = candidate), color = NA) +
@@ -571,73 +628,88 @@ plot2 <- ggplot() +
   scale_fill_manual(values = c(g18govrdes = "red", g18govdgil = "blue", g18govoric = "green", g18govonpa = "orange"),
                     labels = c(g18govrdes = "Ron DeSantis (R)", g18govdgil = "Andrew Gillum (D)", g18govoric = "Darcy G. Richardson (R)", g18govonpa = "No Party Affiliation")) +
   labs(title = "Gubernatorial Candidate with most votes in the 2018\ngeneral elections in Florida (in redrawn precincts)",
-       fill = "Most voted candidate") +
+       fill = "Most voted candidate", 
+       caption = "Source: Redistricting Data Hub") +
   theme(plot.title = element_text(face = "bold"),
         legend.title = element_text(face = "italic", size = 10))
 
 plot2
 
+data_2 %>% 
+  st_drop_geometry() %>% 
+  group_by(redrawn) %>% 
+  count(candidate)
 ```
-
-The dispersion of redrawn precincts in Florida does not appear to be random where those in Central Florida were redistricted more than those on the coasts. We suspect underlying political motivations in Congressional redistricting. In order to test this assumption, we deploy a machine learning model with the following predictors: [fill in with variables we settle on]
 
 # Preparing the Dataset for Modeling
-
-```{r}
-
-# checking for class imbalances
-summary(data$redrawn)
-
-# select variables for model and change types for optimal use
-redrawn_sf = data %>%
-  select(pct_std, county, precinct,
-         g18ussrsco, g18ussdnel, g18govdgil, g18govrdes,
-         redrawn, -geometry) %>%
-  mutate_if(is.logical, factor) %>%
-  st_drop_geometry()
-
-redrawn_sf
-
-```
-
-# Machine Learning Model 
-
-** SECTION ON MACHINE LEARNING PROCESS **
 
 ```{r}
 #| warning: false
 #| message: false
 #| code-fold: true
 
-set.seed(20230510)
+# checking for class imbalances
+summary(data$redrawn)
+
+# select variables for model and change types for optimal use
+redrawn_sf = data %>%
+  select(-district_18, -district_22) %>%
+  mutate_if(is.logical, factor) %>%
+  st_drop_geometry()
+
+```
+
+# Machine Learning Model 
+
+We wanted to see how well the 2018 electoral results at a precinct level predicted whether a precinct was drawn into a new district with different representation. We explored this question using two machine learning models. The code for the process is shown below. We begin by setting up our cross validation using the v-fold method. From there the data is split into training and testing data. For the entire process, we used the popular `tidymodels` package to develop recipes and models for machine learning evaluation. This includes preprocessing steps like identifying non-numeric and categorical variables, addressing imbalances in our outcome variable, normalizing our predictors, and creating a dummy variable for the district to try to account for some geographic factors in the model.
+  
+```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+
+set.seed(1234)
 
 # set up v fold cross validation
 folds = vfold_cv(redrawn_sf, folds = 10, repeats = 1)
 
 # split precinct data into training and testing data
-split = initial_split(redrawn_sf, strata = redrawn)
+split = initial_split(redrawn_sf)
 data_train = training(split)
 data_test = testing(split)
 
 # create recipe
 redrawn_rec = recipe(redrawn ~ ., data = data_train) %>%
   # update roles of variables to not be used in the model but want to keep
-  # for potentiala future use
-  update_role(pct_std, county, precinct, new_role = "ID") %>%
-  # standardize numeric variables
-  step_center(all_numeric_predictors()) %>%
-  step_scale(all_numeric_predictors()) %>%
+  # for future reference
+  update_role(pct_std, new_role = "ID") %>%
+  update_role(county, new_role = "ID") %>%
+  update_role(precinct, new_role = "ID") %>%
+  # down sample redrawn to address class imbalance
+  themis::step_downsample(redrawn) %>%
+  # mean-center predictors
+  step_normalize(all_numeric_predictors()) %>%
+  # dummy split variable
+  step_dummy(district_no_18) %>%
   prep()
+
+# see engineered training data
+bake(redrawn_rec, new_data = data_train)
 
 ```
 
-The first machine learning model will be a simple logistic regression in order to set a baseline of performance.
+The first machine learning model will be a simple logistic regression in order to set a baseline of performance. This model will be predicting whether or not a district experienced change in their Congressional representation due to redistricting. This model has an accuracy of 78% with an area under the ROC curve of 85%. 
 
 ```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+
+set.seed(2345)
 
 # set basic logistic regression model
 logistic_mod = logistic_reg(mode = "classification",
-                             engine = "glm")
+                            engine = "glm")
 
 # feed recipe and model to a logistic regression workflow
 logistic_wf = workflow() %>%
@@ -648,27 +720,36 @@ logistic_wf = workflow() %>%
 logistic_cv = logistic_wf %>%
   fit_resamples(resamples = folds, control = control_resamples(save_pred = TRUE))
 
-# see available metrics
-logistic_cv %>% unnest(.metrics)
 # show best metrics
 logistic_cv %>% collect_metrics()
+
 # pull out best model according to ROC metric
 logistic_best_roc = logistic_cv %>%
   select_best(metric = "roc_auc")
 
 # implement final workflow based on best model
 logistic_final_wf = finalize_workflow(logistic_wf,
-                                       parameters = logistic_best_roc)
+                                      parameters = logistic_best_roc)
+
+# fit final workflow to training data
+logistic_fit = logistic_final_wf %>%
+  fit(data = data_train)
 
 ```
-After having set a baseline of performance with the logistic regression model, implemented with 10-fold cross validation, the next step is to deploy several other models and evaluate their performance relative to this baseline. The following Random Forest model will include the same cross-validation as well as hyperparameter tuning.
+
+After having set a baseline of performance with the logistic regression model, implemented with 10-fold cross validation, the next step is to deploy another model and evaluate its performance relative to this baseline. The following Random Forest model will include the same cross-validation as well as hyper parameter tuning for the number of predictors used at each split and the minimum number of data points needed for a node split to occur.
 
 ```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+
+set.seed(3456)
 
 # set model specifications
 rf_tune_spec = rand_forest(mtry = tune(),
-            trees = 100,
-            min_n = tune()) %>%
+                           trees = 100,
+                           min_n = tune()) %>%
   set_mode("classification") %>%
   set_engine("ranger")
 
@@ -677,80 +758,128 @@ rf_wf = workflow() %>%
   add_recipe(redrawn_rec) %>%
   add_model(rf_tune_spec)
 
-# tune hyperparameters
+# tune hyper parameters
 rf_tune_res = tune_grid(
   rf_wf,
   resamples = folds,
   grid = 20
 )
 
-rf_tune_res %>% unnest(.metrics)
-rf_tune_res %>% collect_metrics()
-rf_tune_res %>% select_best("roc_auc")
+# show best ROC AUC and accuracy
+bind_rows(
+  rf_tune_res %>% show_best("accuracy", n = 1),
+  rf_tune_res %>% show_best("roc_auc", n = 1))
 
-# based on best ROC, mtry = 1 and min_n = 28
+### attempted further hyper parameter tuning but best results were from
+### original tune grid
+
+# based on best ROC, mtry = 59 and min_n = 13
 # create grid for ranges with these values
-rf_grid_reg = grid_regular(
-  mtry(range = c(0,5)),
-  min_n(range = c(20, 40)),
-  levels = 5
-)
+# rf_grid_reg = grid_regular(
+# mtry(range = c(30,60)),
+# min_n(range = c(9,20)),
+# levels = 4
+# )
 
 # tune hyperparameters again based on new grid
-rf_grid_reg_res = tune_grid(
-  rf_wf,
-  resamples = folds,
-  grid = rf_grid_reg
-)
+# rf_grid_reg_res = tune_grid(
+# rf_wf,
+# resamples = folds,
+# grid = rf_grid_reg
+# )
 
-rf_grid_reg_res %>% unnest(.metrics)
-rf_grid_reg_res %>% collect_metrics()
+# show best ROC AUC
+# rf_grid_reg_res %>% show_best("roc_auc")
+
 # pull out best performing hyperparameters based on ROC metric
-rf_best_roc = rf_grid_reg_res %>%
-  select_best("roc_auc")
+rf_best_roc = select_best(rf_tune_res, "roc_auc")
 
+# finalize workflow for fitting data with parameters from model with best ROC
+rf_final_wf = finalize_workflow(rf_wf, parameters = rf_best_roc)
+
+# fit final model to training data and extract parsnip model object
+rf_final_fit = fit(rf_final_wf, data = data_train)
+
+```
+
+## Diagnostics on Random Forest Model
+
+The plot below displays the most important variables in predicting whether a precinct had a change in representation following the redistricting process. The most important factor was whether a precinct was split between districts in the 2018 map. The second, third, and sixth most important variables were dummy variables for districts in the Tampa, Jacksonville, and Orlando areas, respectively. Additionally, votes on amendments to ban gambling on dog races, add additional property tax exemptions, and keep legislators from lobbying for pharmaceutical companies in the years following their career in government. 
+
+```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+
+# add best ROC to model parameters
 rf_final_mod = finalize_model(
   rf_tune_spec,
   rf_best_roc
 )
 
+# visualize variable importance
 rf_final_mod %>%
   set_engine("ranger", importance = "permutation") %>%
   fit(redrawn ~ ., data = juice(redrawn_rec) %>%
         select(-pct_std, -county, -precinct)) %>%
-  vip::vip(geom = "point")
-
-rf_final_wf = workflow() %>%
-  add_recipe(redrawn_rec) %>%
-  add_model(rf_final_mod)
-
-rf_final_fit = fit(rf_final_wf, data_train)
-
+  vip::vip(geom = "point") +
+  theme_classic() +
+  theme(panel.grid.major = element_line())
 ```
 
-## Estimate the Out of Sample Error Rate
+Below are the several diagnostic metrics for the model. The model has 77% accuracy, meaning it correctly classifies the redistricting change in over three-quarters of the cases. The recall of the model was 76%, meaning that of the precincts that experienced a change, the model correctly predicted just over three-quarters of the cases. Lastly, the models specificity, which measures the number of true negatives the model correctly predicted, was 78%. 
 
 ```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
 
-data_test_predictions = predict(rf_final_fit, new_data = data_test)
-
+# create data frame that has whether a district was actually redrawn
+# and the model's prediction for whether it was redrawn
 prediction = bind_cols(
   `actual_redrawn` = data_test$redrawn,
-  `predicted_redrawn` = data_test_predictions$.pred_class
+  `predicted_redrawn` = (predict(rf_final_fit, new_data = data_test))$.pred_class
 )
 
-accuracy(prediction, truth = actual_redrawn, estimate = predicted_redrawn)
-recall(prediction, truth = actual_redrawn, estimate = predicted_redrawn)
-specificity(prediction, truth = actual_redrawn, estimate = predicted_redrawn)
-
-
+# combine metrics into single data frame
+bind_rows(
+  accuracy(prediction, truth = actual_redrawn, estimate = predicted_redrawn),
+  recall(prediction, truth = actual_redrawn, estimate = predicted_redrawn),
+  specificity(prediction, truth = actual_redrawn, estimate = predicted_redrawn),
+  precision(prediction, truth = actual_redrawn, estimate = predicted_redrawn)) %>%
+  select(.metric, .estimate)
 
 ```
 
-Because Districts 18 and 21 seemed to have the highest predictive power in the model, we dug a little deeper at some of their demographic information to see if we could learn more context for those areas. The following charts show the overall population percentages of major races in the state and then specific population estimates for Districts 18 and 21. 
+The plot below demonstrates the ROC curve for our model. 
 
 ```{r}
-cvap_18 <- st_read("/Users/katieward/Desktop/Georgetown/Spring_2023/Data_Science/ppol670_final/ppol670_final/data/fl_cvap_2018_cd/fl_cvap_2018_cd.shp") 
+#| warning: false
+#| message: false
+#| code-fold: true
+
+# ROC curve 
+actual = data_test %>% 
+  select(redrawn)
+preds = predict(rf_final_fit, new_data = data_test, type = "prob")
+
+results = bind_cols(actual, preds)
+
+results %>% 
+  roc_curve(truth = redrawn, .pred_FALSE) %>%
+  autoplot()
+```
+
+Because Districts 13, 5, and 7 seemed to have the highest predictive power in the model, we dug a little deeper at some of their demographic information to see if we could learn more context for those areas. The following charts show the overall population percentages and demographics for these districts.
+
+This first plot identifies the Congressional districts with the highest Black population in the State. The district at the top of the state, Congressional District 5, has the highest black population in the state. Precincts in this district were very likely to be redrawn in the 2022 map. This district was represented by Democrat Al Lawson in 2018 and has now been split between two Republican represented districts. 
+
+```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+
+cvap_18 <- st_read("data/fl_cvap_2018_cd/fl_cvap_2018_cd.shp") 
 
 # Data Visualization of Black population
 cvap_18$percent <- (cvap_18$ALL_BLK18 / cvap_18$ALL_TOT18) * 100
@@ -763,11 +892,19 @@ black_percent <- ggplot() +
                       labels = paste0(seq(0, 100, by = 10), "%")) +
   theme_void() +
   labs(title = "Black Population 2018 by Cong. District",
-       fill = "Percentage of District Population") +
+       fill = "Percentage of District Population",
+       caption = "Source: Redistricting Data Hub") +
   theme(plot.title = element_text(face = "bold"),
         legend.title = element_text(face = "italic", size = 8))
 
-
+black_percent
+```
+This plot shows the map of Congressional districts with the percent of the population that is Hispanic. 
+```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
+#| 
 # Data Visualization of Hispanic Population
 cvap_18$percenthisp <- (cvap_18$ALL_HSP18 / cvap_18$ALL_TOT18) * 100
 
@@ -779,12 +916,18 @@ hisp_percent <- ggplot() +
                       labels = paste0(seq(0, 100, by = 10), "%")) +
   theme_void() +
   labs(title = "Hispanic Population 2018 by Cong. District",
-       fill = "Percentage of District Population") +
+       fill = "Percentage of District Population",
+       caption = "Source: Redistricting Data Hub") +
   theme(plot.title = element_text(face = "bold"),
         legend.title = element_text(face = "italic", size = 8))
 
 hisp_percent
-
+```
+This plot shows the map of Congressional districts with the percent of the population that is white.
+```{r}
+#| warning: false
+#| message: false
+#| code-fold: true
 # Data Visualization of White Population
 
 cvap_18$percentwhite <- (cvap_18$ALL_WHT18 / cvap_18$ALL_TOT18) * 100
@@ -797,15 +940,18 @@ white_percent <- ggplot() +
                       labels = paste0(seq(0, 100, by = 10), "%")) +
   theme_void() +
   labs(title = "White Population 2018 by Cong. District",
-       fill = "Percentage of District Population") +
+       fill = "Percentage of District Population",
+       caption = "Source: Redistricting Data Hub") +
   theme(plot.title = element_text(face = "bold"),
         legend.title = element_text(face = "italic", size = 8))
 
 white_percent
-
-# Data Vis. of Race Estimates for District 18
-cvap_dist18 <- cvap_18 %>%
-  filter(DIST=="Congressional District 18 (116th Congress)") %>%
+```
+Finally, here is the breakdown of demographics for each of top 3 districts identified by our model: District 13 (Tampa), District 5 (Jacksonville/North Florida), and District 7 (North Orlando).
+```{r}
+# Data Vis. of Race Estimates for District 13
+cvap_dist13 <- cvap_18 %>%
+  filter(DIST=="Congressional District 13 (116th Congress)") %>%
   st_drop_geometry() %>%
   select(ALL_TOT18, ALL_AIA18, ALL_ASN18, ALL_BLK18, ALL_NHP18, ALL_WHT18, ALL_2OM18, ALL_HSP18) %>%
   rename("Total Population Est." = ALL_TOT18, 
@@ -817,23 +963,25 @@ cvap_dist18 <- cvap_18 %>%
          "Hispanic" = ALL_HSP18,
          "Asian" = ALL_ASN18)
 
-cvap_dist18 <- cvap_dist18 %>% 
+cvap_dist13 <- cvap_dist13 %>% 
   pivot_longer(everything(),
                     names_to='Race',
                     values_to='Count')
 
-cvap_dist18$Race <- reorder(cvap_dist18$Race, -cvap_dist18$Count)
+cvap_dist13$Race <- reorder(cvap_dist13$Race, -cvap_dist13$Count)
 
-dist18_raceplot <- cvap_dist18 %>%
+dist13_raceplot <- cvap_dist13 %>%
 ggplot(aes(x = Race, y = Count, fill= Count)) +
   geom_bar(stat = "identity") +
-  labs(title = "Population Estimate of District 18", x = "Race", y = "Count") 
+  labs(title = "Population Estimate of District 13", x = "Race", y = "Count") 
 
-dist18_raceplot
+dist13_raceplot
+```
+```{r}
 
-# Data Vis. of Race Estimates for District 21
-cvap_dist21 <- cvap_18 %>%
-  filter(DIST=="Congressional District 21 (116th Congress)") %>%
+# Data Vis. of Race Estimates for District 5
+cvap_dist5 <- cvap_18 %>%
+  filter(DIST=="Congressional District 5 (116th Congress)") %>%
   st_drop_geometry() %>%
   select(ALL_TOT18, ALL_AIA18, ALL_ASN18, ALL_BLK18, ALL_NHP18, ALL_WHT18, ALL_2OM18, ALL_HSP18) %>%
   rename("Total Population Est." = ALL_TOT18, 
@@ -845,18 +993,47 @@ cvap_dist21 <- cvap_18 %>%
          "Hispanic" = ALL_HSP18,
          "Asian" = ALL_ASN18)
 
-cvap_dist21 <- cvap_dist21 %>% 
+cvap_dist5 <- cvap_dist5 %>% 
   pivot_longer(everything(),
                names_to='Race',
                values_to='Count')
 
-cvap_dist21$Race <- reorder(cvap_dist21$Race, -cvap_dist21$Count)
+cvap_dist5$Race <- reorder(cvap_dist5$Race, -cvap_dist5$Count)
 
-dist21_raceplot <- cvap_dist21 %>%
+dist5_raceplot <- cvap_dist5 %>%
   ggplot(aes(x = Race, y = Count, fill= Count)) +
   geom_bar(stat = "identity") +
-  labs(title = "Population Estimate of District 21", x = "Race", y = "Count") 
+  labs(title = "Population Estimate of District 5", x = "Race", y = "Count") 
 
-dist21_raceplot
+dist5_raceplot
+```
+```{r}
+# Data Vis. of Race Estimates for District 5
+cvap_dist7 <- cvap_18 %>%
+  filter(DIST=="Congressional District 7 (116th Congress)") %>%
+  st_drop_geometry() %>%
+  select(ALL_TOT18, ALL_AIA18, ALL_ASN18, ALL_BLK18, ALL_NHP18, ALL_WHT18, ALL_2OM18, ALL_HSP18) %>%
+  rename("Total Population Est." = ALL_TOT18, 
+         "Native American" = ALL_AIA18, 
+         "Black" = ALL_BLK18,
+         "Pacific Islander" = ALL_NHP18,
+         "White" = ALL_WHT18,
+         "Two or More Races" = ALL_2OM18,
+         "Hispanic" = ALL_HSP18,
+         "Asian" = ALL_ASN18)
+
+cvap_dist7 <- cvap_dist7 %>% 
+  pivot_longer(everything(),
+               names_to='Race',
+               values_to='Count')
+
+cvap_dist7$Race <- reorder(cvap_dist7$Race, -cvap_dist7$Count)
+
+dist7_raceplot <- cvap_dist7 %>%
+  ggplot(aes(x = Race, y = Count, fill= Count)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Population Estimate of District 7", x = "Race", y = "Count") 
+
+dist7_raceplot
 ```
 
